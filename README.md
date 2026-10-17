@@ -127,10 +127,11 @@ standalone jar is self-contained. Negative tests assert the SQLState and message
 positive twin. The TLS certificates in `src/test/resources/certs` are warp-sql-jdbc's throwaway
 test certificates (keys public, trusted by nothing but these tests).
 
-CI runs both on JDK 17 and 21 against the `hardcharger-server` release named in
-`.github/workflows/ci.yml`. While the repositories are internal, CI reads the submodule and the
-server release with the `GIZMODATA_READ_TOKEN` secret: a fine-grained token, resource owner
-`gizmodata`, with Contents: read-only on `gizmodata/hardcharger` and `gizmodata/warp-sql-jdbc`.
+CI runs both on JDK 17 and 21 against `hardcharger-server` from the image named in
+`.github/workflows/ci.yml` (`ghcr.io/gizmodata/hardcharger`, pulled with the workflow's
+`GITHUB_TOKEN`; the package grants this repository read access). While the repositories are
+internal, CI fetches the submodule with `WARP_SQL_JDBC_DEPLOY_KEY`, a read-only deploy key of
+`gizmodata/warp-sql-jdbc`. No personal token is involved.
 
 Formatting is google-java-format, checked by Spotless: `mvn spotless:apply` (on JDK 17).
 
