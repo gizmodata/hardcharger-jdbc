@@ -1,0 +1,134 @@
+name: CI
+
+# Unit and integration tests, on every push to main and every pull request, and as the release
+# gate (release.yml calls this workflow on the tagged commit). The integration tests run against a
+# real hardcharger-server release and fail, never skip, without one.
+#
+# While the repositories are internal, two things need the GIZMODATA_READ_TOKEN secret: the
+# third_party/warp-sql-jdbc submodule (gizmodata/warp-sql-jdbc) and the server release
+# (gizmodata/hardcharger). It is a fine-grained token, resource owner gizmodata, with Contents:
+# read-only on those two repositories. It is never printed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      GIZMODATA_READ_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+# "ci-" keeps this group apart from release.yml's when release.yml calls this workflow (a called
+# workflow sees the caller's github.workflow).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # The hardcharger-server release the integration tests run against.
+  HARDCHARGER_SERVER_VERSION: "0.2.0"
+
+jobs:
+  token:
+    name: Read token can reach the internal repositories
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check GIZMODATA_READ_TOKEN
+        env:
+          TOKEN: ${{ secrets.GIZMODATA_READ_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::The GIZMODATA_READ_TOKEN secret is not set. It must be a fine-grained token (resource owner gizmodata) with Contents: read-only on gizmodata/hardcharger and gizmodata/warp-sql-jdbc."
+            exit 1
+          fi
+          printf 'Authorization: Bearer %s\n' "$TOKEN" > "$RUNNER_TEMP/h"
+          failed=0
+          for path in repos/gizmodata/warp-sql-jdbc "repos/gizmodata/hardcharger/releases/tags/v$HARDCHARGER_SERVER_VERSION"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H @"$RUNNER_TEMP/h" "https://api.github.com/$path")
+            if [ "$code" != 200 ]; then
+              echo "::error::GIZMODATA_READ_TOKEN can't read $path (HTTP $code). It needs Contents: read-only on gizmodata/hardcharger and gizmodata/warp-sql-jdbc."
+              failed=1
+            fi
+          done
+          rm -f "$RUNNER_TEMP/h"
+          exit "$failed"
+
+  test:
+    name: Unit and integration tests (JDK ${{ matrix.jdk }})
+    needs: token
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        jdk: [17, 21]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The submodule with the read token only (the main checkout uses the usual token).
+      - name: Fetch the warp-sql-jdbc submodule
+        env:
+          TOKEN: ${{ secrets.GIZMODATA_READ_TOKEN }}
+        run: |
+          header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$header" submodule update --init --depth 1
+          git -C third_party/warp-sql-jdbc log -1 --format='warp-sql-jdbc at %H %s'
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.jdk }}
+          cache: maven
+
+      - name: Install the Warp SQL JDBC driver from the submodule
+        run: mvn -B -ntp -f third_party/warp-sql-jdbc/pom.xml -DskipTests -DskipITs install
+
+      - name: Download hardcharger-server ${{ env.HARDCHARGER_SERVER_VERSION }}
+        env:
+          GH_TOKEN: ${{ secrets.GIZMODATA_READ_TOKEN }}
+        run: |
+          gh release download "v$HARDCHARGER_SERVER_VERSION" -R gizmodata/hardcharger \
+            -p hardcharger-linux-amd64.tar.gz -D "$RUNNER_TEMP"
+          tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/hardcharger-linux-amd64.tar.gz"
+          binary="$RUNNER_TEMP/hardcharger-linux-amd64/bin/hardcharger-server"
+          "$binary" --version
+          "$binary" --version | grep -qx "Hardcharger $HARDCHARGER_SERVER_VERSION"
+          echo "HARDCHARGER_JDBC_TEST_SERVER_BINARY=$binary" >> "$GITHUB_ENV"
+
+      - name: Unit and integration tests
+        run: mvn -B -ntp verify
+
+      - name: Check formatting and Javadoc
+        if: matrix.jdk == 17
+        run: mvn -B -ntp spotless:check javadoc:javadoc -Ddoclint=all
+
+      - name: Check the standalone jar is self-contained
+        if: matrix.jdk == 17
+        run: |
+          set -euo pipefail
+          jar tf target/hardcharger-jdbc.jar > entries.txt
+          unzip -p target/hardcharger-jdbc.jar META-INF/services/java.sql.Driver > drivers.txt
+          grep -qx 'com.gizmodata.hardcharger.jdbc.HardchargerDriver' drivers.txt
+          grep -qx 'com.gizmodata.warpsql.jdbc.WarpDriver' drivers.txt
+          # Every dependency is relocated except zstd-jni, whose JNI symbols name its package.
+          if grep -E '^(org|com/fasterxml|com/google)/' entries.txt; then
+            echo "::error::unrelocated classes in the standalone jar"
+            exit 1
+          fi
+
+      - name: Server log of a failed run
+        if: failure()
+        run: find /tmp -name server.log -path '*hardcharger-jdbc-server*' -exec tail -50 {} \; || true
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.jdk == 17
+        with:
+          name: hardcharger-jdbc
+          path: |
+            target/hardcharger-jdbc.jar
+            target/hardcharger-jdbc-*.jar

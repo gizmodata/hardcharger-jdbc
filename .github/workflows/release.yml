@@ -1,0 +1,68 @@
+name: release
+
+# On a vX.Y.Z tag: the full test suite (ci.yml, unit and integration against a real
+# hardcharger-server) on the tagged commit, then a GitHub Release with the jars that suite built and
+# tested, and the tag's CHANGELOG section as its notes. Nothing goes to Maven Central.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    secrets: inherit
+
+  release:
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the project version
+        run: |
+          version=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' pom.xml | head -1)
+          [ -n "$version" ] || { echo "::error::no project version in pom.xml"; exit 1; }
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME != v$version (pom.xml)"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: hardcharger-jdbc
+          path: dist
+
+      - name: Check the jars
+        run: |
+          set -euo pipefail
+          ls -la dist
+          test -s dist/hardcharger-jdbc.jar
+          test -s "dist/hardcharger-jdbc-$VERSION.jar"
+
+      - name: Extract this version's CHANGELOG section
+        run: |
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          [ -s release-notes.md ] || { echo "::error::no CHANGELOG section for $VERSION"; exit 1; }
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: release-notes.md
+          files: |
+            dist/hardcharger-jdbc.jar
+            dist/hardcharger-jdbc-${{ env.VERSION }}.jar
