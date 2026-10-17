@@ -128,7 +128,8 @@ positive twin. The TLS certificates in `src/test/resources/certs` are warp-sql-j
 test certificates (keys public, trusted by nothing but these tests).
 
 CI runs both on JDK 17 and 21 against `hardcharger-server` from the image named in
-`.github/workflows/ci.yml` (`ghcr.io/gizmodata/hardcharger`, pulled with the workflow's
+`.github/workflows/ci.yml` (`ghcr.io/gizmodata/hardcharger:main`, Hardcharger's main branch;
+pin a `:sha-<short>` tag to reproduce a run; pulled with the workflow's
 `GITHUB_TOKEN`; the package grants this repository read access). While the repositories are
 internal, CI fetches the submodule with `WARP_SQL_JDBC_DEPLOY_KEY`, a read-only deploy key of
 `gizmodata/warp-sql-jdbc`. No personal token is involved.
