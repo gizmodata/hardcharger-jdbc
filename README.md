@@ -77,6 +77,35 @@ defaults of its own beyond the port, so it reads a large result in up to 8 parti
 each over its own connection (`resultPartitions`, default 8; `resultPartitions=1` reads one
 stream), in the server's row order unless `resultOrder=any`.
 
+### 🪪 Client certificate sign-in (mutual TLS)
+
+On a server that verifies client certificates and lets them sign in (`--mtls-ca-cert` with
+`--mtls-certificate-sign-in`), the certificate is the credential: set `authType` to
+`client_certificate` (or `mtls`) and give no user or password.
+
+```java
+Properties properties = new Properties();
+properties.setProperty("authType", "client_certificate");
+properties.setProperty("clientCertificate", "client.pem");
+properties.setProperty("clientKey", "client-key.pem");    // PKCS#8, PKCS#1 RSA or SEC1 EC, unencrypted
+properties.setProperty("tlsRootCerts", "server-ca.pem");  // when the server's CA is private
+try (Connection connection = DriverManager.getConnection("jdbc:hardcharger://db.example.com", properties);
+     ResultSet rows = connection.createStatement().executeQuery("SELECT HARDCHARGER_USER()")) {
+  rows.next();
+  System.out.println(rows.getString(1)); // the certificate's identity: ops@example.com
+}
+```
+
+The same keys work in the URL
+(`jdbc:hardcharger://db.example.com?authType=mtls&clientCertificate=client.pem&clientKey=client-key.pem`).
+The identity is the certificate's e-mail SAN unless the server says otherwise
+(`--mtls-identity-source`); it must be one of `--mtls-admin-identities` or, under access
+control, a user of the store. The token is bound to the certificate, and every connection the
+driver opens (result partitions too) presents it. Refusals have SQLState 28000, with the
+server's code in `WarpProblem.codeOf(error)` (`unknown_certificate_identity`,
+`certificate_mismatch`, `client_certificate_required`, `certificate_revoked`,
+`certificate_identity_mismatch`).
+
 What is Hardcharger's in `DatabaseMetaData`:
 
 | Method | Answer |

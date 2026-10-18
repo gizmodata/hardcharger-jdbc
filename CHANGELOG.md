@@ -9,6 +9,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Built on warp-sql-jdbc 00ffbb2 (was e1e0866): client certificate sign-in. With
+  `authType=client_certificate` (alias `mtls`), `clientCertificate` and `clientKey`, a
+  `jdbc:hardcharger://` connection signs in with the mutual-TLS certificate alone, on a server
+  with `--mtls-ca-cert` and `--mtls-certificate-sign-in`. `ClientCertificateIT` covers sign-in
+  (an e-mail identity matching `--mtls-admin-identities` ignoring case), the options in the URL,
+  a split result read with the bound token (every row, in order), an unknown identity
+  (`unknown_certificate_identity`), a password beside the certificate (28000), a bound token over
+  another certificate (`certificate_mismatch`) and its twin, and a server with certificate
+  sign-in off (`mtls_identity`) and its password twin; six of its seven tests fail on e1e0866.
+  The test certificates are warp-sql-jdbc's regenerated set (client certificates with e-mail SANs).
+
 - Built on warp-sql-jdbc e1e0866 (was 7bb1d90): a large result is read in up to 8 partitions at
   once by default (`resultPartitions` 8, was 1). PartitionsIT checks the default, its twin
   (`resultPartitions=1`), and that a 2-million-row split result keeps every row in order.
