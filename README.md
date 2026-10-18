@@ -73,7 +73,9 @@ try (Connection connection = DriverManager.getConnection("jdbc:hardcharger://loc
 The connection properties (`tlsRootCerts`, mutual TLS, `async`, `retainResults`,
 `ipcCompression`, `resultPartitions`, ...) and their defaults are the Warp SQL driver's: see its
 [property table](https://github.com/gizmodata/warp-sql-jdbc#properties). This driver sets no
-defaults of its own beyond the port.
+defaults of its own beyond the port, so it reads a large result in up to 8 partitions at once,
+each over its own connection (`resultPartitions`, default 8; `resultPartitions=1` reads one
+stream), in the server's row order unless `resultOrder=any`.
 
 What is Hardcharger's in `DatabaseMetaData`:
 

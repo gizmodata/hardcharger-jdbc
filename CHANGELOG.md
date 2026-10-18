@@ -9,6 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Built on warp-sql-jdbc e1e0866 (was 7bb1d90): a large result is read in up to 8 partitions at
+  once by default (`resultPartitions` 8, was 1). PartitionsIT checks the default, its twin
+  (`resultPartitions=1`), and that a 2-million-row split result keeps every row in order.
 - CI reads the warp-sql-jdbc submodule with a read-only deploy key (`WARP_SQL_JDBC_DEPLOY_KEY`)
   and pulls `hardcharger-server` from the private image with `GITHUB_TOKEN`: no personal token.
 
