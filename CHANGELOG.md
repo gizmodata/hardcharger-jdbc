@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documentation
+
+- Trademark notices: Hardcharger™ and GizmoData™ on the README titles and first mentions, package
+  metadata and the footer, which says both are trademarks of GizmoData LLC.
+
 ### Changed
 
 - Built on warp-sql-jdbc 00ffbb2 (was e1e0866): client certificate sign-in. With

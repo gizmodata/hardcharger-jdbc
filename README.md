@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/gizmodata/hardcharger">
-    <img src="docs/assets/hardcharger-jdbc-banner.svg" alt="Hardcharger JDBC: jdbc:hardcharger:// for Java 17+ and BI tools. By GizmoData." width="100%">
+    <img src="docs/assets/hardcharger-jdbc-banner.svg" alt="Hardcharger™ JDBC: jdbc:hardcharger:// for Java 17+ and BI tools. By GizmoData™." width="100%">
   </a>
 </p>
 
@@ -11,7 +11,7 @@
   <a href="https://github.com/gizmodata/warp-sql-jdbc"><img src="https://img.shields.io/badge/built%20on-Warp%20SQL%20JDBC-31a8db.svg" alt="Built on the Warp SQL JDBC driver"></a>
   <a href="https://github.com/gizmodata/hardcharger-jdbc/releases/latest"><img src="https://img.shields.io/badge/release-jar-orange.svg?logo=GitHub" alt="Release jar"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg" alt="Apache 2.0 license"></a>
-  <a href="https://gizmodata.com"><img src="https://img.shields.io/badge/by-GizmoData-f15a24.svg" alt="GizmoData"></a>
+  <a href="https://gizmodata.com"><img src="https://img.shields.io/badge/by-GizmoData%E2%84%A2-f15a24.svg" alt="GizmoData™"></a>
 </p>
 
 <h3 align="center">Hardcharger for Java applications, DBeaver and other JDBC tools: one jar.</h3>
@@ -20,7 +20,7 @@
 
 ## ☕ What is it?
 
-The JDBC driver for [Hardcharger](https://github.com/gizmodata/hardcharger), GizmoData's DuckDB 2.0
+The JDBC driver for [Hardcharger™](https://github.com/gizmodata/hardcharger), GizmoData™'s DuckDB 2.0
 server. Hardcharger speaks [Warp SQL](https://github.com/gizmodata/warp-sql), so this driver is a
 thin layer on the [Warp SQL JDBC driver](https://github.com/gizmodata/warp-sql-jdbc): it accepts
 `jdbc:hardcharger://` URLs, uses Hardcharger's port (31337) when the URL names none, and names
@@ -180,6 +180,8 @@ Central yet.
 ---
 
 <p align="center">
-  <a href="https://gizmodata.com"><img src="docs/assets/gizmodata-logo.png" alt="GizmoData" width="56"></a><br>
-  <sub>Built by <a href="https://gizmodata.com">GizmoData</a></sub>
+  <a href="https://gizmodata.com"><img src="docs/assets/gizmodata-logo.png" alt="GizmoData™" width="56"></a><br>
+  <sub>Built by <a href="https://gizmodata.com">GizmoData™</a></sub>
 </p>
+
+<p align="center"><sub>Hardcharger™ and GizmoData™ are trademarks of GizmoData LLC.</sub></p>

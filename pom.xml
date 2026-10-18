@@ -9,8 +9,8 @@
   <version>0.1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
-  <name>Hardcharger JDBC Driver</name>
-  <description>The JDBC driver for Hardcharger: jdbc:hardcharger:// URLs on the Warp SQL JDBC driver.</description>
+  <name>Hardcharger™ JDBC Driver</name>
+  <description>The JDBC driver for Hardcharger™: jdbc:hardcharger:// URLs on the Warp SQL JDBC driver.</description>
   <url>https://github.com/gizmodata/hardcharger-jdbc</url>
 
   <licenses>
