@@ -164,6 +164,29 @@ class ClientCertificateIT {
   }
 
   @Test
+  void noCertificateIsCertificateRequired() throws SQLException {
+    // The server refuses the handshake (TLS alert certificate_required): that is the refusal
+    // certificate_required (it was client_certificate_required), not an unreachable server.
+    Properties none = new Properties();
+    none.setProperty("tlsRootCerts", cert("ca.pem"));
+    none.setProperty("user", HardchargerServer.USER);
+    none.setProperty("password", server.password);
+    SQLInvalidAuthorizationSpecException error =
+        assertThrows(
+            SQLInvalidAuthorizationSpecException.class,
+            () -> DriverManager.getConnection(server.url(""), none));
+    assertEquals("28000", error.getSQLState());
+    assertEquals("certificate_required", WarpProblem.codeOf(error));
+    // The twin: the same password sign-in over a certificate.
+    Properties presented = presenting("client");
+    presented.setProperty("user", HardchargerServer.USER);
+    presented.setProperty("password", server.password);
+    try (Connection connection = DriverManager.getConnection(server.url(""), presented)) {
+      assertEquals(HardchargerServer.USER, scalar(connection, "SELECT HARDCHARGER_USER()"));
+    }
+  }
+
+  @Test
   void aPasswordBesideTheCertificateIsRefused() {
     Properties properties = signingInAs("client");
     properties.setProperty("user", HardchargerServer.USER);

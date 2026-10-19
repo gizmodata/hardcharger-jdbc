@@ -25,7 +25,8 @@ server. Hardcharger speaks [Warp SQL](https://github.com/gizmodata/warp-sql), so
 thin layer on the [Warp SQL JDBC driver](https://github.com/gizmodata/warp-sql-jdbc): it accepts
 `jdbc:hardcharger://` URLs, uses Hardcharger's port (31337) when the URL names none, and names
 itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, from TLS to result
-streaming and partitioned reads, is the Warp SQL driver's.
+streaming and partitioned reads, is the Warp SQL driver's, which speaks the Warp SQL protocol
+1.0.0.
 
 **Status: 0.1.0-SNAPSHOT.** Nothing is published yet.
 
@@ -103,7 +104,8 @@ The identity is the certificate's e-mail SAN unless the server says otherwise
 control, a user of the store. The token is bound to the certificate, and every connection the
 driver opens (result partitions too) presents it. Refusals have SQLState 28000, with the
 server's code in `WarpProblem.codeOf(error)` (`unknown_certificate_identity`,
-`certificate_mismatch`, `client_certificate_required`, `certificate_revoked`,
+`certificate_mismatch`, `certificate_required` (also when the server refuses a connection
+without a certificate at the TLS handshake), `certificate_revoked`,
 `certificate_identity_mismatch`).
 
 What is Hardcharger's in `DatabaseMetaData`:
@@ -114,9 +116,13 @@ What is Hardcharger's in `DatabaseMetaData`:
 | `getDriverVersion()`, `getDriverMajorVersion()`, `getDriverMinorVersion()` | this driver's version |
 | `getURL()` | the `jdbc:hardcharger:` URL you gave, with passwords and tokens shown as `***` |
 | `getDatabaseProductName()`, `getDatabaseProductVersion()` | the server's own answer: `Hardcharger`, and its version |
+| `isReadOnly()` | the server's own answer (`server_read_only`): true for a server started with `--read-only` |
 
 `connection.unwrap(com.gizmodata.warpsql.jdbc.WarpConnection.class)` reaches the Warp SQL
-connection (for `getSessionId()`, for example). `Statement.getConnection()` returns that Warp SQL
+connection (for `getSessionId()`, or `getTransactionState()`: the server's view of the session's
+transaction, which sees SQL `BEGIN` too). Errors carry the server's code in
+`WarpProblem.codeOf(error)`, or a `client_` code for a failure the driver found in the server's
+answer (`client_http_error`, `client_protocol_error`). `Statement.getConnection()` returns that Warp SQL
 connection too, not the Hardcharger one. `jdbc:warp://` URLs keep going to the Warp SQL driver,
 which the standalone jar also registers.
 
