@@ -1,69 +1,365 @@
 name: release
 
-# On a vX.Y.Z tag: the full test suite (ci.yml, unit and integration against a real
-# hardcharger-server) on the tagged commit, then a GitHub Release with the jars that suite built and
-# tested, and the tag's CHANGELOG section as its notes. Nothing goes to Maven Central.
+# Maven Central (com.gizmodata:hardcharger-jdbc) and the GitHub Release.
+#
+# On a vX.Y.Z tag: waits until Maven Central has the Warp SQL JDBC driver pom.xml names
+# (warp-sql-jdbc.version, which must be a release: release warp-sql-jdbc first), then the full
+# test suite (ci.yml: unit and integration tests against a real hardcharger-server) on the tagged
+# commit, against that published driver. Then the signed bundle is built, checked and uploaded to
+# Maven Central as AUTOMATIC (published as soon as Central validates it; the job waits until it is
+# published), and a GitHub Release gets both jars and the tag's CHANGELOG section. Pushing the tag
+# is the decision to publish.
+#
+# By hand (Run workflow, from a release/* branch: the production environment admits v* tags and
+# release/* branches only): the same tests, then the signed bundle is built and checked and kept as
+# a workflow artifact. With central_upload, it is also uploaded as USER_MANAGED: Central validates
+# it and holds it for Publish or Drop on central.sonatype.com (Deployments). Drop it there to test
+# without publishing. If Central doesn't have the Warp SQL driver version yet, it is built from the
+# submodule at that version, so a dry run works before anything is published. No GitHub Release.
+#
+# Secrets (environment "production"): CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD, a Central
+# Portal user token (central.sonatype.com, View Account, Generate User Token); GPG_PRIVATE_KEY, the
+# ASCII-armored secret signing key, and GPG_PASSPHRASE. The key must be the one named below, and
+# its public half on keyserver.ubuntu.com, where Central looks it up. WARP_SQL_JDBC_DEPLOY_KEY (repo
+# secret) while the Warp SQL driver comes from the internal submodule.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      central_upload:
+        description: "Also upload the bundle to Maven Central as USER_MANAGED (validated, then held for Publish or Drop on central.sonatype.com)"
+        type: boolean
+        default: false
+      version:
+        description: "Version to build (default: pom.xml's, without -SNAPSHOT)"
+        type: string
+        default: ""
+      warp_sql_jdbc_version:
+        description: "Warp SQL JDBC driver version to depend on (default: pom.xml's warp-sql-jdbc.version, without -SNAPSHOT)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
+# A release is a deploy: queue, never cut one off halfway.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: false
+
+env:
+  GROUP_ID: com.gizmodata
+  ARTIFACT_ID: hardcharger-jdbc
+  # "GizmoData LLC (Maven Central signing) <philip@gizmodata.com>", RSA-4096, expires 2029-10-19.
+  SIGNING_KEY_FINGERPRINT: BAAC1F9A2083FE825C9834D39CB426669B8EEEAA
 
 jobs:
+  # Cheap checks first, so a mistake fails in seconds, not after the tests.
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      upload: ${{ steps.version.outputs.upload }}
+      auto_publish: ${{ steps.version.outputs.auto_publish }}
+      warp_version: ${{ steps.version.outputs.warp_version }}
+      warp_from: ${{ steps.warp.outputs.from }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Decide the versions and the upload
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_UPLOAD: ${{ inputs.central_upload }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_WARP_VERSION: ${{ inputs.warp_sql_jdbc_version }}
+        run: |
+          set -euo pipefail
+          pom_version=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' pom.xml | head -1)
+          [ -n "$pom_version" ] || { echo "::error::no project version in pom.xml"; exit 1; }
+          pom_warp=$(sed -n 's:^    <warp-sql-jdbc.version>\(.*\)</warp-sql-jdbc.version>$:\1:p' pom.xml)
+          [ -n "$pom_warp" ] || { echo "::error::no warp-sql-jdbc.version in pom.xml"; exit 1; }
+          if [ "$IS_TAG" = true ]; then
+            version=$pom_version
+            [ "v$version" = "$REF_NAME" ] || { echo "::error::tag $REF_NAME != v$version (pom.xml): set the release version in pom.xml before tagging"; exit 1; }
+            warp_version=$pom_warp
+            [[ $warp_version != *-SNAPSHOT ]] || { echo "::error::pom.xml's warp-sql-jdbc.version is $warp_version: a release must depend on a released Warp SQL JDBC driver"; exit 1; }
+            upload=true
+            auto_publish=true
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            version=${INPUT_VERSION:-${pom_version%-SNAPSHOT}}
+            warp_version=${INPUT_WARP_VERSION:-${pom_warp%-SNAPSHOT}}
+            upload=$INPUT_UPLOAD
+            auto_publish=false
+          else
+            echo "::error::runs on v* tags and by hand only"; exit 1
+          fi
+          for v in "$version" "$warp_version"; do
+            if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || [[ $v == *SNAPSHOT* ]]; then
+              echo "::error::'$v' is not a release version (X.Y.Z or X.Y.Z-rc.N)"; exit 1
+            fi
+          done
+          echo "version=$version warp_version=$warp_version upload=$upload auto_publish=$auto_publish"
+          {
+            echo "version=$version"
+            echo "warp_version=$warp_version"
+            echo "upload=$upload"
+            echo "auto_publish=$auto_publish"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check this version's CHANGELOG section
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The trailing space keeps "2.0.1" from matching "## [2.0.10] - ...".
+          awk -v header="## [$VERSION] " '
+            index($0, header) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md || { echo "::error::no CHANGELOG.md section '## [$VERSION] - <date>'"; exit 1; }
+
+      - name: Check Maven Central doesn't have this version yet
+        if: steps.version.outputs.upload == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          url="https://repo1.maven.org/maven2/${GROUP_ID//.//}/$ARTIFACT_ID/$VERSION/$ARTIFACT_ID-$VERSION.pom"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "$url")
+          case "$code" in
+            404) echo "$GROUP_ID:$ARTIFACT_ID:$VERSION is not on Maven Central yet" ;;
+            200) echo "::error::$GROUP_ID:$ARTIFACT_ID:$VERSION is already on Maven Central, which never takes a version twice"; exit 1 ;;
+            *) echo "::error::can't tell whether $VERSION is on Maven Central (HTTP $code from $url)"; exit 1 ;;
+          esac
+
+      # A tag waits up to an hour, so both drivers can be tagged together: Central takes a few
+      # minutes to serve a release after publishing it. By hand, the submodule stands in.
+      - name: The Warp SQL JDBC driver on Maven Central
+        id: warp
+        env:
+          WARP_VERSION: ${{ steps.version.outputs.warp_version }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          set -euo pipefail
+          url="https://repo1.maven.org/maven2/com/gizmodata/warp-sql-jdbc/$WARP_VERSION/warp-sql-jdbc-$WARP_VERSION.pom"
+          if [ "$IS_TAG" = true ]; then attempts=60; else attempts=1; fi
+          for attempt in $(seq 1 "$attempts"); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "$url" || true)
+            if [ "$code" = 200 ]; then
+              echo "com.gizmodata:warp-sql-jdbc:$WARP_VERSION is on Maven Central"
+              echo "from=central" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$attempt" -lt "$attempts" ]; then
+              echo "com.gizmodata:warp-sql-jdbc:$WARP_VERSION not on Maven Central yet (HTTP $code); waiting ($attempt/$attempts)"
+              sleep 60
+            fi
+          done
+          if [ "$IS_TAG" = true ]; then
+            echo "::error::com.gizmodata:warp-sql-jdbc:$WARP_VERSION is not on Maven Central after an hour: release warp-sql-jdbc v$WARP_VERSION first"
+            exit 1
+          fi
+          echo "::notice::com.gizmodata:warp-sql-jdbc:$WARP_VERSION is not on Maven Central: building it from the submodule for this run"
+          echo "from=submodule" >> "$GITHUB_OUTPUT"
+
   tests:
+    needs: preflight
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
       packages: read  # the server image the integration tests run against
     secrets: inherit
 
-  release:
-    needs: tests
-    if: startsWith(github.ref, 'refs/tags/v')
+  publish:
+    needs: [preflight, tests]
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: production
     permissions:
-      contents: write
+      contents: write  # the GitHub Release
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      UPLOAD: ${{ needs.preflight.outputs.upload }}
+      AUTO_PUBLISH: ${{ needs.preflight.outputs.auto_publish }}
+      WARP_VERSION: ${{ needs.preflight.outputs.warp_version }}
+      WARP_FROM: ${{ needs.preflight.outputs.warp_from }}
     steps:
       - uses: actions/checkout@v7
-
-      - name: Check the tag matches the project version
-        run: |
-          version=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' pom.xml | head -1)
-          [ -n "$version" ] || { echo "::error::no project version in pom.xml"; exit 1; }
-          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME != v$version (pom.xml)"; exit 1; }
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-
-      - uses: actions/download-artifact@v8
         with:
-          name: hardcharger-jdbc
-          path: dist
+          persist-credentials: false
 
-      - name: Check the jars
+      - name: Check the secrets are set
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          DEPLOY_KEY: ${{ secrets.WARP_SQL_JDBC_DEPLOY_KEY }}
+        run: |
+          missing=()
+          [ -n "$GPG_PRIVATE_KEY" ] || missing+=(GPG_PRIVATE_KEY)
+          [ -n "$GPG_PASSPHRASE" ] || missing+=(GPG_PASSPHRASE)
+          if [ "$UPLOAD" = true ]; then
+            [ -n "$CENTRAL_TOKEN_USERNAME" ] || missing+=(CENTRAL_TOKEN_USERNAME)
+            [ -n "$CENTRAL_TOKEN_PASSWORD" ] || missing+=(CENTRAL_TOKEN_PASSWORD)
+          fi
+          if [ "$WARP_FROM" = submodule ]; then
+            [ -n "$DEPLOY_KEY" ] || missing+=(WARP_SQL_JDBC_DEPLOY_KEY)
+          fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::missing secrets: ${missing[*]} (see the comment at the top of release.yml)"
+            exit 1
+          fi
+
+      - name: Import the signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          ls -la dist
-          test -s dist/hardcharger-jdbc.jar
-          test -s "dist/hardcharger-jdbc-$VERSION.jar"
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import 2>&1 | grep -v '^gpg: key .*: secret key imported$' || true
+          fingerprints=$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10 }')
+          if [[ $'\n'$fingerprints$'\n' != *$'\n'$SIGNING_KEY_FINGERPRINT$'\n'* ]]; then
+            echo "::error::GPG_PRIVATE_KEY is not the signing key $SIGNING_KEY_FINGERPRINT (release.yml)"
+            exit 1
+          fi
+          # Central verifies signatures with the public key from a keyserver.
+          curl -fsS --retry 3 -o public-key.asc \
+            "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$SIGNING_KEY_FINGERPRINT" \
+            || { echo "::error::the public key $SIGNING_KEY_FINGERPRINT is not on keyserver.ubuntu.com"; exit 1; }
+          published=$(gpg --batch --with-colons --import-options show-only --import public-key.asc | awk -F: '$1 == "fpr" { print $10 }')
+          if [[ $'\n'$published$'\n' != *$'\n'$SIGNING_KEY_FINGERPRINT$'\n'* ]]; then
+            echo "::error::keyserver.ubuntu.com does not return the key $SIGNING_KEY_FINGERPRINT"
+            exit 1
+          fi
+          rm -f public-key.asc
+          echo "signing with $SIGNING_KEY_FINGERPRINT (on keyserver.ubuntu.com)"
 
-      - name: Extract this version's CHANGELOG section
+      # settings.xml server "central", its credentials read from the environment at run time.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          server-id: central
+          server-username: CENTRAL_TOKEN_USERNAME
+          server-password: CENTRAL_TOKEN_PASSWORD
+
+      # By hand only, before the Warp SQL driver is on Central: build it from the submodule at the
+      # version this bundle will name (the dry run's stand-in; it is never uploaded).
+      - name: Build the Warp SQL JDBC driver from the submodule
+        if: env.WARP_FROM == 'submodule'
+        env:
+          DEPLOY_KEY: ${{ secrets.WARP_SQL_JDBC_DEPLOY_KEY }}
         run: |
-          awk -v ver="$VERSION" '
-            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+          set -euo pipefail
+          key="$RUNNER_TEMP/warp_sql_jdbc_key"
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          git -c url."ssh://git@github.com/gizmodata/warp-sql-jdbc".insteadOf=https://github.com/gizmodata/warp-sql-jdbc \
+            -c core.sshCommand="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+            submodule update --init --depth 1
+          rm -f "$key"
+          git -C third_party/warp-sql-jdbc log -1 --format='warp-sql-jdbc at %H %s'
+          mvn -B -ntp -q -f third_party/warp-sql-jdbc/pom.xml org.codehaus.mojo:versions-maven-plugin:2.23.0:set -DnewVersion="$WARP_VERSION" -DgenerateBackupPoms=false
+          mvn -B -ntp -f third_party/warp-sql-jdbc/pom.xml -DskipTests -DskipITs install
+
+      - name: Set the versions
+        run: |
+          set -euo pipefail
+          pom_version=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' pom.xml | head -1)
+          if [ "$pom_version" != "$VERSION" ]; then
+            mvn -B -ntp -q org.codehaus.mojo:versions-maven-plugin:2.23.0:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          fi
+          pom_warp=$(sed -n 's:^    <warp-sql-jdbc.version>\(.*\)</warp-sql-jdbc.version>$:\1:p' pom.xml)
+          if [ "$pom_warp" != "$WARP_VERSION" ]; then
+            mvn -B -ntp -q org.codehaus.mojo:versions-maven-plugin:2.23.0:set-property -Dproperty=warp-sql-jdbc.version -DnewVersion="$WARP_VERSION" -DgenerateBackupPoms=false
+          fi
+          grep -q "<warp-sql-jdbc.version>$WARP_VERSION</warp-sql-jdbc.version>" pom.xml || { echo "::error::could not set warp-sql-jdbc.version"; exit 1; }
+          echo "building $GROUP_ID:$ARTIFACT_ID:$VERSION on com.gizmodata:warp-sql-jdbc:$WARP_VERSION ($WARP_FROM)"
+
+      # The unit tests run again; the integration tests ran in the tests job on this commit.
+      - name: Build and sign the bundle
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: >-
+          mvn -B -ntp -P release -DskipITs
+          -Dgpg.keyname="$SIGNING_KEY_FINGERPRINT"
+          -Dcentral.skipUpload=true
+          deploy
+
+      - name: Check the bundle
+        run: >-
+          CENTRAL_BUNDLE_DEPENDENCIES="com.gizmodata:warp-sql-jdbc:$WARP_VERSION"
+          dev/check-central-bundle.sh target/central-publishing/central-bundle.zip "$GROUP_ID" "$ARTIFACT_ID" "$VERSION" "$SIGNING_KEY_FINGERPRINT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: central-bundle-${{ env.VERSION }}
+          path: target/central-publishing/central-bundle.zip
+          if-no-files-found: error
+
+      # Rebuilds the same commit (only the signatures' timestamps differ) and uploads it. A tag
+      # publishes (AUTOMATIC) and waits until Central has published it; by hand it is USER_MANAGED
+      # and waits until Central has validated it.
+      - name: Upload to Maven Central
+        if: env.UPLOAD == 'true'
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ "$AUTO_PUBLISH" = true ]; then wait_until=published; else wait_until=validated; fi
+          mvn -B -ntp -P release -DskipTests -DskipITs \
+            -Dgpg.keyname="$SIGNING_KEY_FINGERPRINT" \
+            -Dcentral.autoPublish="$AUTO_PUBLISH" \
+            -Dcentral.waitUntil="$wait_until" \
+            -DwaitMaxTime=3600 \
+            deploy
+          CENTRAL_BUNDLE_DEPENDENCIES="com.gizmodata:warp-sql-jdbc:$WARP_VERSION" \
+            dev/check-central-bundle.sh target/central-publishing/central-bundle.zip "$GROUP_ID" "$ARTIFACT_ID" "$VERSION" "$SIGNING_KEY_FINGERPRINT"
+          if [ "$AUTO_PUBLISH" != true ]; then
+            echo "::notice::$GROUP_ID:$ARTIFACT_ID:$VERSION is validated and held on central.sonatype.com (Deployments): Publish or Drop it there"
+          fi
+
+      - name: Collect the release files
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          staged="target/central-staging/${GROUP_ID//.//}/$ARTIFACT_ID/$VERSION"
+          mkdir dist
+          # The driver alone (what Central has), and the standalone jar for DBeaver and other tools.
+          cp "$staged/$ARTIFACT_ID-$VERSION.jar" "$staged/$ARTIFACT_ID-$VERSION.jar.asc" dist/
+          cp target/hardcharger-jdbc.jar dist/
+          printf '%s' "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 \
+            --local-user "$SIGNING_KEY_FINGERPRINT" --armor --detach-sign dist/hardcharger-jdbc.jar
+          gpg --batch --verify dist/hardcharger-jdbc.jar.asc dist/hardcharger-jdbc.jar
+          awk -v header="## [$VERSION] " '
+            index($0, header) == 1 { found = 1; next }
             found && /^## \[/ { exit }
             found { print }
           ' CHANGELOG.md > release-notes.md
-          [ -s release-notes.md ] || { echo "::error::no CHANGELOG section for $VERSION"; exit 1; }
+          ls -la dist
 
       - uses: softprops/action-gh-release@v3
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           body_path: release-notes.md
+          prerelease: ${{ contains(env.VERSION, '-') }}
           files: |
             dist/hardcharger-jdbc.jar
-            dist/hardcharger-jdbc-${{ env.VERSION }}.jar
+            dist/hardcharger-jdbc.jar.asc
+            dist/${{ env.ARTIFACT_ID }}-${{ env.VERSION }}.jar
+            dist/${{ env.ARTIFACT_ID }}-${{ env.VERSION }}.jar.asc

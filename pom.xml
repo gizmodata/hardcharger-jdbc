@@ -6,30 +6,71 @@
 
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>2.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Hardcharger™ JDBC Driver</name>
   <description>The JDBC driver for Hardcharger™: jdbc:hardcharger:// URLs on the Warp SQL JDBC driver.</description>
   <url>https://github.com/gizmodata/hardcharger-jdbc</url>
 
+  <!-- Name, description, url, licenses, developers and scm are what Maven Central requires of
+       every POM; the scm and issue URLs are the public repository's from the launch on. -->
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
-      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
     </license>
   </licenses>
+
+  <organization>
+    <name>GizmoData LLC</name>
+    <url>https://gizmodata.com</url>
+  </organization>
+
+  <developers>
+    <developer>
+      <name>Philip Moore</name>
+      <email>philip@gizmodata.com</email>
+      <organization>GizmoData LLC</organization>
+      <organizationUrl>https://gizmodata.com</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/gizmodata/hardcharger-jdbc.git</connection>
+    <developerConnection>scm:git:https://github.com/gizmodata/hardcharger-jdbc.git</developerConnection>
+    <url>https://github.com/gizmodata/hardcharger-jdbc</url>
+    <tag>v${project.version}</tag>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/gizmodata/hardcharger-jdbc/issues</url>
+  </issueManagement>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>17</maven.compiler.release>
 
-    <!-- Built from the third_party/warp-sql-jdbc submodule (mvn -f third_party/warp-sql-jdbc/pom.xml
-         -DskipTests -DskipITs install) until it is published. -->
-    <warp-sql-jdbc.version>0.1.0-SNAPSHOT</warp-sql-jdbc.version>
+    <!-- The Warp SQL JDBC driver this one is built on. A -SNAPSHOT is built from the
+         third_party/warp-sql-jdbc submodule (mvn -f third_party/warp-sql-jdbc/pom.xml -DskipTests
+         -DskipITs install; CI checks the two versions match); a release comes from Maven Central,
+         and a release of this driver must name one (release.yml checks it is published). -->
+    <warp-sql-jdbc.version>1.0.0-SNAPSHOT</warp-sql-jdbc.version>
     <junit.version>6.1.3</junit.version>
     <!-- Not the newest: Spotless on JDK 17, the build's JDK, allows google-java-format 1.28.0 at most. -->
     <google-java-format.version>1.28.0</google-java-format.version>
+
+    <!-- Maven Central (the release profile). By default an upload is USER_MANAGED: the plugin
+         uploads the signed bundle, waits until Central has validated it, and leaves it waiting
+         for Publish or Drop on central.sonatype.com. -Dcentral.autoPublish=true makes it
+         AUTOMATIC (published as soon as it validates), for the real release only.
+         -Dcentral.skipUpload=true builds target/central-publishing/central-bundle.zip and
+         uploads nothing. -->
+    <central.autoPublish>false</central.autoPublish>
+    <central.waitUntil>validated</central.waitUntil>
+    <central.skipUpload>false</central.skipUpload>
 
     <shaded.jar>${project.build.directory}/hardcharger-jdbc.jar</shaded.jar>
   </properties>
@@ -135,6 +176,21 @@
           <artifactId>spotless-maven-plugin</artifactId>
           <version>3.10.4</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.4.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-gpg-plugin</artifactId>
+          <version>3.2.8</version>
+        </plugin>
+        <plugin>
+          <groupId>org.sonatype.central</groupId>
+          <artifactId>central-publishing-maven-plugin</artifactId>
+          <version>0.12.0</version>
+        </plugin>
       </plugins>
     </pluginManagement>
 
@@ -169,6 +225,22 @@
           <compilerArgs>
             <arg>-Xlint:all,-serial,-processing</arg>
           </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <!-- The driver-only jar (the one Maven Central gets) names its version and module too. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+            </manifest>
+            <manifestEntries>
+              <Automatic-Module-Name>com.gizmodata.hardcharger.jdbc</Automatic-Module-Name>
+            </manifestEntries>
+          </archive>
         </configuration>
       </plugin>
 
@@ -296,4 +368,102 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- mvn -P release deploy: sources and Javadoc jars, a GPG signature of every file, and the
+         upload to Maven Central (com.gizmodata, central.sonatype.com). Needs the Central Portal
+         user token as server "central" in settings.xml, the signing key in gpg's keyring
+         (-Dgpg.keyname=<id> if it has several) and its passphrase in MAVEN_GPG_PASSPHRASE.
+         release.yml runs it; see README "Releases". -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>enforce-release</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireReleaseVersion>
+                      <message>Maven Central takes release versions only: set one first (release.yml does).</message>
+                    </requireReleaseVersion>
+                    <requireReleaseDeps>
+                      <message>A release can't depend on a SNAPSHOT.</message>
+                    </requireReleaseDeps>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+                <configuration>
+                  <!-- Class path, not module path: the jar is built from the shaded jar, whose
+                       Automatic-Module-Name would otherwise make javadoc see zstd-jni twice. -->
+                  <legacyMode>true</legacyMode>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <!-- No pinentry dialog: the passphrase comes from MAVEN_GPG_PASSPHRASE. -->
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>${central.autoPublish}</autoPublish>
+              <waitUntil>${central.waitUntil}</waitUntil>
+              <skipUpload>${central.skipUpload}</skipUpload>
+              <deploymentName>${project.artifactId} ${project.version}</deploymentName>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
