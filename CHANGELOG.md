@@ -14,7 +14,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Trademark notices: Hardcharger™ and GizmoData™ on the README titles and first mentions, package
   metadata and the footer, which says both are trademarks of GizmoData LLC.
 
+### Added
+
+- Browser sign-in through `jdbc:hardcharger://` (Warp SQL spec §4.3): `authType=oauth_browser`
+  (alias `external`) with `oauthBrowser` and `oauthTimeout`, the Warp SQL driver's settings passed
+  through unchanged, on a server started with `--oauth-client-id` and `--oauth-base-url`. The
+  README has a section; `BrowserSignInIT` (6) signs in under either name and from the URL with a
+  mock OpenID Connect provider (PKCE, single-use codes, nonce), and checks a refusal at the
+  provider (`access_denied`), a person the server doesn't admit (`invalid_credentials`), the
+  timeout (`SQLTimeoutException`) and a server without the capability.
+
 ### Changed
+
+- Built on warp-sql-jdbc 02ce45f (was 6c714ba), its Warp SQL 1.0 main: `ipcCompression=auto`
+  (`lz4_frame` on a near link, `zstd` on a far one; results arrive compressed) and
+  `resultPartitions` 32 (was 8; the server sizes the split by the result), browser sign-in, and
+  DuckDB's `HUGEINT`/`UHUGEINT` read exactly as `BigDecimal` under
+  `SET arrow_lossless_conversion = true`. `PartitionsIT` checks the new default. Tested against
+  `hardcharger-server` 2.0.0-rc.1.
 
 - Built on warp-sql-jdbc 6c714ba (was 00ffbb2): **Warp SQL protocol 1.0.0**, so it needs a
   Hardcharger server that speaks 1.0.0 (its `spec/v1.0` branch); there are no fallbacks for the

@@ -70,6 +70,15 @@ final class HardchargerServer implements AutoCloseable {
    * Starts a server on {@code port}; with {@code tls}, the arguments must include the TLS flags.
    */
   static HardchargerServer start(int port, boolean tls, String... extraArgs) {
+    return start(port, tls, Map.of(), extraArgs);
+  }
+
+  /**
+   * Starts a server on {@code port} with more environment variables; {@code {port}} in an argument
+   * becomes the server's port.
+   */
+  static HardchargerServer start(
+      int port, boolean tls, Map<String, String> extraEnvironment, String... extraArgs) {
     Path binary = binary();
     byte[] random = new byte[12];
     new SecureRandom().nextBytes(random);
@@ -89,7 +98,9 @@ final class HardchargerServer implements AutoCloseable {
                   "0",
                   "--admin-username",
                   USER));
-      command.addAll(List.of(extraArgs));
+      for (String arg : extraArgs) {
+        command.add(arg.replace("{port}", Integer.toString(port)));
+      }
       ProcessBuilder builder =
           new ProcessBuilder(command)
               .directory(home.toFile())
@@ -104,6 +115,7 @@ final class HardchargerServer implements AutoCloseable {
       environment.put("HOME", home.toString());
       environment.put("TMPDIR", home.toString());
       environment.put("HARDCHARGER_ADMIN_PASSWORD", password);
+      environment.putAll(extraEnvironment);
       Process process = builder.start();
       HardchargerServer server = new HardchargerServer(port, password, tls, process, log);
       Runtime.getRuntime().addShutdownHook(new Thread(server::close));

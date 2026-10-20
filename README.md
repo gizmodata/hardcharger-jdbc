@@ -77,9 +77,11 @@ try (Connection connection = DriverManager.getConnection("jdbc:hardcharger://loc
 The connection properties (`tlsRootCerts`, mutual TLS, `async`, `retainResults`,
 `ipcCompression`, `resultPartitions`, ...) and their defaults are the Warp SQL driver's: see its
 [property table](https://github.com/gizmodata/warp-sql-jdbc#properties). This driver sets no
-defaults of its own beyond the port, so it reads a large result in up to 8 partitions at once,
-each over its own connection (`resultPartitions`, default 8; `resultPartitions=1` reads one
-stream), in the server's row order unless `resultOrder=any`.
+defaults of its own beyond the port, so it reads a large result in up to 32 partitions at once,
+each over its own connection (`resultPartitions`, default 32; the server sizes the split by the
+result, and `resultPartitions=1` reads one stream), in the server's row order unless
+`resultOrder=any`. Results come compressed (`ipcCompression=auto`: `lz4_frame` on a near link,
+`zstd` on a far one).
 
 ### 🪪 Client certificate sign-in (mutual TLS)
 
@@ -110,6 +112,41 @@ server's code in `WarpProblem.codeOf(error)` (`unknown_certificate_identity`,
 `certificate_mismatch`, `certificate_required` (also when the server refuses a connection
 without a certificate at the TLS handshake), `certificate_revoked`,
 `certificate_identity_mismatch`).
+
+### 🌐 Browser sign-in
+
+On a server with browser sign-in configured (`--oauth-client-id` and the identity provider's
+`--token-allowed-issuer`; its discovery then lists the `oauth_browser` capability), the person
+signs in with that identity provider in a web browser and the application holds no password:
+set `authType` to `oauth_browser` (or `external`) and give no user or password.
+
+```java
+Properties properties = new Properties();
+properties.setProperty("authType", "oauth_browser");
+try (Connection connection = DriverManager.getConnection("jdbc:hardcharger://db.example.com", properties);
+     ResultSet rows = connection.createStatement().executeQuery("SELECT HARDCHARGER_USER()")) {
+  rows.next();
+  System.out.println(rows.getString(1)); // whoever signed in to the identity provider
+}
+```
+
+These are the Warp SQL driver's settings, passed through unchanged (and the same keys work in the
+URL: `jdbc:hardcharger://db.example.com?authType=external&oauthTimeout=120`):
+
+| Property | Default | Meaning |
+|---|---|---|
+| `authType` | `password` | `oauth_browser` (alias `external`): browser sign-in (Warp SQL spec §4.3) |
+| `oauthBrowser` | the desktop's browser | The command that opens the sign-in page, given its URL as the last argument (split on spaces, no shell); `none` prints the URL to standard error for you to open |
+| `oauthTimeout` | `300` | Seconds to wait for the person to sign in |
+
+`getConnection` opens the sign-in page and waits, polling the server, until the person has signed
+in or `oauthTimeout` passes (`SQLTimeoutException`). A refusal at the identity provider
+(`access_denied`) or a person the server doesn't admit (`invalid_credentials`, outside
+`--token-authorized-emails`) is an `SQLInvalidAuthorizationSpecException` with SQLState 28000 and
+the server's code in `WarpProblem.codeOf(error)`; a server without browser sign-in is refused
+before any browser opens. The access token isn't renewed on its own: when it expires, connect
+again. `user`, `password`, `token` and `subjectToken` can't be given beside it. See the Warp SQL
+driver's [Browser sign-in](https://github.com/gizmodata/warp-sql-jdbc#-browser-sign-in) section.
 
 What is Hardcharger's in `DatabaseMetaData`:
 

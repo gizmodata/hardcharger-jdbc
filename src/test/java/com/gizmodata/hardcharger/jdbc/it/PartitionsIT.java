@@ -13,8 +13,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * The driver inherits warp-sql-jdbc's default of reading a large result in up to 8 partitions at
- * once (spec §6.10), and a result read that way keeps its rows and order.
+ * The driver inherits warp-sql-jdbc's default of reading a large result in up to 32 partitions at
+ * once (spec §6.10; the server sizes the split by the result), and a result read that way keeps its
+ * rows and order.
  */
 class PartitionsIT {
   private static HardchargerServer server;
@@ -38,8 +39,8 @@ class PartitionsIT {
   }
 
   @Test
-  void resultsAreReadInEightPartitionsByDefault() throws SQLException {
-    assertEquals(8, resultPartitions(""));
+  void resultsAreReadInThirtyTwoPartitionsByDefault() throws SQLException {
+    assertEquals(32, resultPartitions(""));
   }
 
   @Test
