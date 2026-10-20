@@ -27,11 +27,37 @@ thin layer on the [Warp SQL JDBC driver](https://github.com/gizmodata/warp-sql-j
 itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, from TLS to result
 streaming and partitioned reads, is the Warp SQL driver's.
 
-**Status: 0.1.0-SNAPSHOT.** Nothing is published yet.
+**Status: 2.0.0-SNAPSHOT.** Nothing is published yet: 2.0.0 goes to Maven Central with
+Hardcharger 2.0.0.
+
+## 📦 Install
+
+<!-- LAUNCH: these coordinates resolve once 2.0.0 is on Maven Central (Hardcharger GA). -->
+
+Maven:
+
+```xml
+<dependency>
+  <groupId>com.gizmodata</groupId>
+  <artifactId>hardcharger-jdbc</artifactId>
+  <version>2.0.0</version>
+</dependency>
+```
+
+Gradle:
+
+```groovy
+implementation 'com.gizmodata:hardcharger-jdbc:2.0.0'
+```
+
+It brings one dependency, `com.gizmodata:warp-sql-jdbc`, itself a single jar with everything
+relocated inside. For DBeaver and other tools, download the standalone `hardcharger-jdbc.jar` from
+the [latest release](https://github.com/gizmodata/hardcharger-jdbc/releases/latest).
 
 ## 🛠️ Build
 
-The Warp SQL JDBC driver is a submodule until it is published:
+The Warp SQL JDBC driver is a submodule while `pom.xml` names a `-SNAPSHOT` of it
+(`warp-sql-jdbc.version`); a released version comes from Maven Central instead:
 
 ```bash
 git clone --recurse-submodules https://github.com/gizmodata/hardcharger-jdbc.git
@@ -162,16 +188,40 @@ CI runs both on JDK 17 and 21 against `hardcharger-server` from the image named 
 `.github/workflows/ci.yml` (`ghcr.io/gizmodata/hardcharger:main`, Hardcharger's main branch;
 pin a `:sha-<short>` tag to reproduce a run; pulled with the workflow's
 `GITHUB_TOKEN`; the package grants this repository read access). While the repositories are
-internal, CI fetches the submodule with `WARP_SQL_JDBC_DEPLOY_KEY`, a read-only deploy key of
-`gizmodata/warp-sql-jdbc`. No personal token is involved.
+internal, CI fetches the submodule (for a `-SNAPSHOT` `warp-sql-jdbc.version`, which must match
+the submodule's version) with `WARP_SQL_JDBC_DEPLOY_KEY`, a read-only deploy key of
+`gizmodata/warp-sql-jdbc`. For a released version it checks Maven Central has it and uses that. No
+personal token is involved.
 
 Formatting is google-java-format, checked by Spotless: `mvn spotless:apply` (on JDK 17).
 
 ## 📦 Releases
 
-A `vX.Y.Z` tag runs the full test suite on the tagged commit, then attaches both jars to a GitHub
-Release with that version's [CHANGELOG](CHANGELOG.md) section. Nothing is published to Maven
-Central yet.
+The version in `pom.xml` is the next release with `-SNAPSHOT`. A release depends on a released
+Warp SQL JDBC driver, so release warp-sql-jdbc first. To release X.Y.Z: set `<version>X.Y.Z</version>`
+and `warp-sql-jdbc.version` to the released driver (and repin the submodule to its tag), move
+`[Unreleased]` in the [CHANGELOG](CHANGELOG.md) to `## [X.Y.Z] - <date>`, commit, and push the commit
+and the tag `vX.Y.Z` together.
+
+`.github/workflows/release.yml` then waits (up to an hour) until Maven Central serves that Warp SQL
+driver, runs the full test suite (unit and integration) on the tagged commit against it, builds the
+jar, sources and Javadoc jars, signs each file with GizmoData's Maven Central key
+(`BAAC1F9A2083FE825C9834D39CB426669B8EEEAA`), checks the bundle (`dev/check-central-bundle.sh`),
+uploads it to Maven Central and waits until it is published, and makes a GitHub Release with both
+jars, their signatures and the CHANGELOG section. Pushing the tag is the decision to publish; Maven
+Central never takes a version twice.
+
+A dry run, from a `release/*` branch: **Actions > release > Run workflow**. It runs the tests and
+builds, signs and checks the bundle (a workflow artifact) without uploading; a Warp SQL driver
+version Central doesn't have yet is built from the submodule for the run. With `central_upload` it
+also uploads the bundle as USER_MANAGED: Central validates it and holds it under **Deployments** on
+[central.sonatype.com](https://central.sonatype.com/publishing/deployments) for Publish or Drop.
+Drop it there to test without publishing.
+
+By hand: `mvn -P release deploy` with the Central Portal token as server `central` in
+`settings.xml`, the key in gpg's keyring and its passphrase in `MAVEN_GPG_PASSPHRASE`. It uploads
+USER_MANAGED (`-Dcentral.autoPublish=true` publishes as soon as it validates), and
+`-Dcentral.skipUpload=true` only builds `target/central-publishing/central-bundle.zip`.
 
 ## 📄 License
 

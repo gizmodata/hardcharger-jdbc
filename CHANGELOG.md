@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Release
+
+- Maven Central publishing, for 2.0.0 with Hardcharger 2.0.0: `com.gizmodata:hardcharger-jdbc` is
+  the driver jar (its version and module name now in its manifest) depending on
+  `com.gizmodata:warp-sql-jdbc`, with sources and Javadoc jars, each file GPG-signed (`-P release`,
+  through `central-publishing-maven-plugin` 0.12.0; uploads are USER_MANAGED unless
+  `-Dcentral.autoPublish=true`; a release can't depend on a SNAPSHOT). The POM carries the
+  developer, SCM and issue metadata Central requires. The version line moves to `2.0.0-SNAPSHOT`.
+- `release.yml`: on a `v*` tag, waits until Maven Central serves the Warp SQL driver
+  `warp-sql-jdbc.version` names, runs the full test suite on the tagged commit against it, then
+  checks the signed bundle (`dev/check-central-bundle.sh`) and publishes it to Maven Central, and
+  attaches both jars and their signatures to the GitHub Release. By hand from a `release/*` branch
+  it is a dry run, or with `central_upload` a USER_MANAGED upload to validate and drop.
+- CI takes a `-SNAPSHOT` Warp SQL driver from the submodule (and checks its version matches) and a
+  released one from Maven Central. Builds skip documentation-only changes.
+
+### Changed
+
+- Built on warp-sql-jdbc c472b00 (1.0.0-SNAPSHOT, was 00ffbb2): its Maven artifact is now its
+  standalone jar, with no dependencies of its own, so this driver brings two jars and nothing else.
+
 ### Documentation
 
 - Trademark notices: Hardcharger™ and GizmoData™ on the README titles and first mentions, package
