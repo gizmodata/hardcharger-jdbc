@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-20
+<!-- Set the date above at tag time. -->
+
+The first release, with Hardcharger 2.0.0, on warp-sql-jdbc 1.0.0 (Warp SQL protocol 1.0.0).
+Earlier builds (0.1.0-SNAPSHOT) were never published; the Changed entries below describe what
+moved since them.
+
 ### Release
 
 - Maven Central publishing, for 2.0.0 with Hardcharger 2.0.0: `com.gizmodata:hardcharger-jdbc` is
