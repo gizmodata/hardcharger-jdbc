@@ -14,6 +14,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Built on warp-sql-jdbc 6c714ba (was 00ffbb2): **Warp SQL protocol 1.0.0**, so it needs a
+  Hardcharger server that speaks 1.0.0 (its `spec/v1.0` branch); there are no fallbacks for the
+  draft's names. What changes through `jdbc:hardcharger://`: a server that requires client
+  certificates refuses a connection without one as `certificate_required` (SQLState 28000,
+  `SQLInvalidAuthorizationSpecException`; it was `client_certificate_required`, and a handshake
+  refusal was an unreachable server, 08xxx); `DatabaseMetaData.isReadOnly` reads Hardcharger's
+  `server_read_only`; codes the driver makes up begin with `client_` (`client_http_error`,
+  `client_protocol_error`); `WarpProblem.cancelReason()` says why a statement was cancelled;
+  `WarpConnection.getTransactionState()` (through `unwrap`) is the server's view of the session's
+  transaction; after `invalid_token` with `token_revoked`, `credentials_changed` or
+  `principal_dropped` the driver no longer signs in again on its own. New live tests:
+  `ProtocolV1IT` (the session's transaction across SQL `BEGIN`/`ROLLBACK`; `isReadOnly` on a
+  `--read-only` server and its read-write twin) and `ClientCertificateIT`'s certificate-less
+  connection with its twin; the read-only and certificate tests fail on 00ffbb2 (the transaction
+  one doesn't compile there).
+
 - Built on warp-sql-jdbc 00ffbb2 (was e1e0866): client certificate sign-in. With
   `authType=client_certificate` (alias `mtls`), `clientCertificate` and `clientKey`, a
   `jdbc:hardcharger://` connection signs in with the mutual-TLS certificate alone, on a server
