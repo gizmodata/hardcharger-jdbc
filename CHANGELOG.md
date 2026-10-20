@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- The README banner is the new Hardcharger™ logo, the bull mascot lockup in a light and a dark
+  version that follows the reader's color scheme, in place of the GizmoData banner card.
 - Trademark notices: Hardcharger™ and GizmoData™ on the README titles and first mentions, package
   metadata and the footer, which says both are trademarks of GizmoData LLC.
 
