@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-21
+
+### Fixed
+
+- `DatabaseMetaData.getIndexInfo()` now reads Hardcharger's explicitly created indexes from
+  `duckdb_indexes()`, so DBeaver and other JDBC tools keep indexes visible after refresh. Reports
+  uniqueness and ordered columns, including names containing commas or escaped quotes, with
+  exact catalog/schema/table filtering and JDBC ordering. A null table allows schema-wide reads.
+  Closing the metadata result also closes its backing statement.
+
+### Added
+
+- Regression coverage for the GizmoSQL DBeaver QA cases: missing/incorrect credentials fail at
+  connect, the configured username is honored, plaintext and TLS metadata reads, primary keys
+  and editing, DML update counts, high-precision decimals, time/boolean/binary edits, and index
+  creation, refresh, filtering and deletion.
+
 ## [2.0.0] - 2026-10-20
 
 The first release, with Hardcharger 2.0.0, on warp-sql-jdbc 1.0.0 (Warp SQL protocol 1.0.0).
