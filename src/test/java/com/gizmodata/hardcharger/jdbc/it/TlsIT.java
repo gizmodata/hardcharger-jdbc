@@ -57,6 +57,20 @@ class TlsIT {
   }
 
   @Test
+  void explicitlyDisabledCertificateVerificationStillAuthenticatesAndReadsTables()
+      throws SQLException {
+    Properties properties = server.properties();
+    properties.setProperty("disableCertificateVerification", "true");
+    properties.setProperty("useSystemTrustStore", "false");
+    try (Connection connection = DriverManager.getConnection(server.url(""), properties);
+        ResultSet tables = connection.getMetaData().getTables(null, null, "%", null)) {
+      while (tables.next()) {
+        assertTrue(tables.getString("TABLE_NAME") != null);
+      }
+    }
+  }
+
+  @Test
   void anUntrustedCertificateFails() {
     Properties properties = server.properties();
     properties.setProperty("tlsRootCerts", cert("other-ca.pem"));

@@ -31,12 +31,9 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Warp SQL driver's, which speaks the Warp SQL protocol
 1.0.0.
 
-**Status: 2.0.0-SNAPSHOT.** Nothing is published yet: 2.0.0 goes to Maven Central with
-Hardcharger 2.0.0.
+**Current release: 2.0.1**, published on Maven Central. Compatible with Hardcharger 2.0.0.
 
 ## 📦 Install
-
-<!-- LAUNCH: these coordinates resolve once 2.0.0 is on Maven Central (Hardcharger GA). -->
 
 Maven:
 
@@ -44,14 +41,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.0.0'
+implementation 'com.gizmodata:hardcharger-jdbc:2.0.1'
 ```
 
 It brings one dependency, `com.gizmodata:warp-sql-jdbc`, itself a single jar with everything
@@ -211,6 +208,12 @@ which the standalone jar also registers.
    Hardcharger JDBC Driver.
 
 No JVM options are needed. Keep DBeaver's default of a separate connection for metadata reads.
+
+Since 2.0.1, `DatabaseMetaData.getIndexInfo()` reads explicitly created indexes from
+`duckdb_indexes()`, including uniqueness, column order and quoted column names. Catalog, schema
+and table filters match names exactly; `null` leaves a filter unrestricted, including a null
+table for tools that load a schema's indexes together. Cardinality and page counts are unknown
+and reported as zero. Primary keys are exposed separately through `getPrimaryKeys()`.
 
 ## ✅ Testing
 

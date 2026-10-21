@@ -9,8 +9,9 @@ import java.sql.DatabaseMetaData;
 
 /**
  * The Warp SQL driver's {@link Connection} and {@link DatabaseMetaData}, as Hardcharger's: the
- * metadata names this driver and its version and the {@code jdbc:hardcharger:} URL; everything else
- * is the Warp SQL driver's own answer. {@code unwrap} reaches the Warp SQL classes.
+ * metadata names this driver and its version and the {@code jdbc:hardcharger:} URL, and reads
+ * indexes from Hardcharger's DuckDB catalogs. Other answers come from Warp SQL. {@code unwrap}
+ * reaches the Warp SQL classes.
  */
 final class Wrappers {
   private Wrappers() {}
@@ -109,8 +110,12 @@ final class Wrappers {
     }
 
     @Override
-    Object own(Object proxy, Method method, Object[] args) {
+    Object own(Object proxy, Method method, Object[] args) throws Exception {
       if (args != null) {
+        if ("getIndexInfo".equals(method.getName())) {
+          return IndexMetadata.read(
+              connection, (String) args[0], (String) args[1], (String) args[2], (Boolean) args[3]);
+        }
         return this;
       }
       switch (method.getName()) {
