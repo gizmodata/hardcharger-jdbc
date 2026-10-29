@@ -5,21 +5,21 @@ import java.sql.SQLNonTransientConnectionException;
 
 /**
  * A {@code jdbc:hardcharger://host[:port][/catalog][?key=value&...][;key=value;...]} URL, and the
- * {@code jdbc:warp://} URL the Warp SQL driver is given for it.
+ * {@code jdbc:chargewire://} URL the Chargewire driver is given for it.
  *
- * <p>Everything but the scheme and the port is the Warp SQL driver's URL syntax, passed on as it
+ * <p>Everything but the scheme and the port is the Chargewire driver's URL syntax, passed on as it
  * is: the same options, the same TLS default ({@code useEncryption=false} for plain HTTP). The port
- * defaults to {@value #DEFAULT_PORT}, Hardcharger's, where a {@code jdbc:warp://} URL without one
- * means 443 or 80.
+ * defaults to {@value #DEFAULT_PORT}, Hardcharger's, where a {@code jdbc:chargewire://} URL without
+ * one means 443 or 80.
  */
 final class HardchargerUrl {
   /** The URL prefix this driver accepts (case-insensitive). */
   static final String PREFIX = "jdbc:hardcharger:";
 
-  /** Hardcharger's Warp SQL port, used when the URL names none. */
+  /** Hardcharger's Chargewire port, used when the URL names none. */
   static final int DEFAULT_PORT = 31337;
 
-  private static final String WARP_PREFIX = "jdbc:warp:";
+  private static final String CHARGEWIRE_PREFIX = "jdbc:chargewire:";
 
   private HardchargerUrl() {}
 
@@ -28,14 +28,14 @@ final class HardchargerUrl {
   }
 
   /**
-   * Rewrites a {@code jdbc:hardcharger://} URL to the {@code jdbc:warp://} URL with the same
+   * Rewrites a {@code jdbc:hardcharger://} URL to the {@code jdbc:chargewire://} URL with the same
    * meaning, with the port made explicit.
    *
    * @param url a URL this driver accepts
-   * @return the Warp SQL URL
+   * @return the Chargewire URL
    * @throws SQLException (SQLState 08001) if the URL has no {@code //}, no host or a bad port
    */
-  static String toWarp(String url) throws SQLException {
+  static String toChargewire(String url) throws SQLException {
     if (!accepts(url)) {
       throw invalid(url, "it must start with " + PREFIX + "//");
     }
@@ -86,7 +86,7 @@ final class HardchargerUrl {
         || Integer.parseInt(port) > 65535) {
       throw invalid(url, "the port must be a number from 1 to 65535, not '" + port + "'");
     }
-    return WARP_PREFIX + "//" + host + ":" + port + tail;
+    return CHARGEWIRE_PREFIX + "//" + host + ":" + port + tail;
   }
 
   /** Hides password and token values, so a URL can appear in messages and logs. */
@@ -99,18 +99,18 @@ final class HardchargerUrl {
   }
 
   /**
-   * Restates a Warp SQL driver error about the rewritten URL in terms of the URL the application
+   * Restates a Chargewire driver error about the rewritten URL in terms of the URL the application
    * gave.
    */
-  static SQLException restate(SQLException error, String url, String warpUrl) {
+  static SQLException restate(SQLException error, String url, String chargewireUrl) {
     String message = error.getMessage();
-    if (message == null || !message.startsWith("Invalid Warp SQL URL")) {
+    if (message == null || !message.startsWith("Invalid Chargewire URL")) {
       return error;
     }
     String restated =
         message
-            .replace(redact(warpUrl), redact(url))
-            .replaceFirst("^Invalid Warp SQL URL", "Invalid Hardcharger URL");
+            .replace(redact(chargewireUrl), redact(url))
+            .replaceFirst("^Invalid Chargewire URL", "Invalid Hardcharger URL");
     return new SQLNonTransientConnectionException(
         restated, error.getSQLState(), error.getErrorCode(), error);
   }

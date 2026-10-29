@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.gizmodata.warpsql.jdbc.WarpProblem;
+import com.gizmodata.chargewire.jdbc.ChargewireProblem;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -31,11 +31,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Signing in with the mutual-TLS client certificate ({@code authType=client_certificate}, Warp SQL
- * §4.4) through {@code jdbc:hardcharger://}, against a server with {@code --mtls-ca-cert} and
- * {@code --mtls-certificate-sign-in}. The test client certificate's identity is its e-mail SAN,
- * {@code client@example.com}; the server is configured with {@value #IDENTITY}, which matches it
- * ignoring case, and is the session's user.
+ * Signing in with the mutual-TLS client certificate ({@code authType=client_certificate},
+ * Chargewire §4.4) through {@code jdbc:hardcharger://}, against a server with {@code
+ * --mtls-ca-cert} and {@code --mtls-certificate-sign-in}. The test client certificate's identity is
+ * its e-mail SAN, {@code client@example.com}; the server is configured with {@value #IDENTITY},
+ * which matches it ignoring case, and is the session's user.
  */
 class ClientCertificateIT {
   private static final String IDENTITY = "CLIENT@example.com";
@@ -154,7 +154,7 @@ class ClientCertificateIT {
             SQLInvalidAuthorizationSpecException.class,
             () -> DriverManager.getConnection(server.url(""), signingInAs("other-client")));
     assertEquals("28000", error.getSQLState());
-    assertEquals("unknown_certificate_identity", WarpProblem.codeOf(error));
+    assertEquals("unknown_certificate_identity", ChargewireProblem.codeOf(error));
     assertTrue(error.getMessage().contains("other@example.com"), error.getMessage());
     // The twin: a known identity from the same CA signs in.
     try (Connection connection =
@@ -176,7 +176,7 @@ class ClientCertificateIT {
             SQLInvalidAuthorizationSpecException.class,
             () -> DriverManager.getConnection(server.url(""), none));
     assertEquals("28000", error.getSQLState());
-    assertEquals("certificate_required", WarpProblem.codeOf(error));
+    assertEquals("certificate_required", ChargewireProblem.codeOf(error));
     // The twin: the same password sign-in over a certificate.
     Properties presented = presenting("client");
     presented.setProperty("user", HardchargerServer.USER);
@@ -208,7 +208,7 @@ class ClientCertificateIT {
         assertThrows(
             SQLInvalidAuthorizationSpecException.class,
             () -> DriverManager.getConnection(server.url(""), other));
-    assertEquals("certificate_mismatch", WarpProblem.codeOf(error));
+    assertEquals("certificate_mismatch", ChargewireProblem.codeOf(error));
     // The twin: the same token over the certificate it is bound to.
     Properties same = presenting("client");
     same.setProperty("token", token);
@@ -260,7 +260,7 @@ class ClientCertificateIT {
     HttpResponse<String> response =
         http.send(
             HttpRequest.newBuilder(
-                    URI.create("https://127.0.0.1:" + server.port + "/warp/v1/auth/token"))
+                    URI.create("https://127.0.0.1:" + server.port + "/chargewire/v1/auth/token"))
                 .header("Content-Type", "application/json")
                 .POST(
                     HttpRequest.BodyPublishers.ofString("{\"grant_type\":\"client_certificate\"}"))

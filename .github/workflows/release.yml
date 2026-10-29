@@ -2,8 +2,8 @@ name: release
 
 # Maven Central (com.gizmodata:hardcharger-jdbc) and the GitHub Release.
 #
-# On a vX.Y.Z tag: waits until Maven Central has the Warp SQL JDBC driver pom.xml names
-# (warp-sql-jdbc.version, which must be a release: release warp-sql-jdbc first), then the full
+# On a vX.Y.Z tag: waits until Maven Central has the Chargewire JDBC driver pom.xml names
+# (chargewire-jdbc.version, which must be a release: release chargewire-jdbc first), then the full
 # test suite (ci.yml: unit and integration tests against a real hardcharger-server) on the tagged
 # commit, against that published driver. Then the signed bundle is built, checked and uploaded to
 # Maven Central as AUTOMATIC (published as soon as Central validates it; the job waits until it is
@@ -14,14 +14,15 @@ name: release
 # release/* branches only): the same tests, then the signed bundle is built and checked and kept as
 # a workflow artifact. With central_upload, it is also uploaded as USER_MANAGED: Central validates
 # it and holds it for Publish or Drop on central.sonatype.com (Deployments). Drop it there to test
-# without publishing. If Central doesn't have the Warp SQL driver version yet, it is built from the
-# submodule at that version, so a dry run works before anything is published. No GitHub Release.
+# without publishing. If Central doesn't have the Chargewire driver version yet, it is built from
+# the submodule at that version, so a dry run works before anything is published. No GitHub
+# Release.
 #
 # Secrets (environment "production"): CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD, a Central
 # Portal user token (central.sonatype.com, View Account, Generate User Token); GPG_PRIVATE_KEY, the
 # ASCII-armored secret signing key, and GPG_PASSPHRASE. The key must be the one named below, and
-# its public half on keyserver.ubuntu.com, where Central looks it up. WARP_SQL_JDBC_DEPLOY_KEY (repo
-# secret) while the Warp SQL driver comes from the internal submodule.
+# its public half on keyserver.ubuntu.com, where Central looks it up. CHARGEWIRE_JDBC_DEPLOY_KEY
+# (repo secret) while the Chargewire driver comes from the internal submodule.
 
 on:
   push:
@@ -36,8 +37,8 @@ on:
         description: "Version to build (default: pom.xml's, without -SNAPSHOT)"
         type: string
         default: ""
-      warp_sql_jdbc_version:
-        description: "Warp SQL JDBC driver version to depend on (default: pom.xml's warp-sql-jdbc.version, without -SNAPSHOT)"
+      chargewire_jdbc_version:
+        description: "Chargewire JDBC driver version to depend on (default: pom.xml's chargewire-jdbc.version, without -SNAPSHOT)"
         type: string
         default: ""
 
@@ -64,8 +65,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       upload: ${{ steps.version.outputs.upload }}
       auto_publish: ${{ steps.version.outputs.auto_publish }}
-      warp_version: ${{ steps.version.outputs.warp_version }}
-      warp_from: ${{ steps.warp.outputs.from }}
+      chargewire_version: ${{ steps.version.outputs.chargewire_version }}
+      chargewire_from: ${{ steps.chargewire.outputs.from }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -79,37 +80,37 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           INPUT_UPLOAD: ${{ inputs.central_upload }}
           INPUT_VERSION: ${{ inputs.version }}
-          INPUT_WARP_VERSION: ${{ inputs.warp_sql_jdbc_version }}
+          INPUT_CHARGEWIRE_VERSION: ${{ inputs.chargewire_jdbc_version }}
         run: |
           set -euo pipefail
           pom_version=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' pom.xml | head -1)
           [ -n "$pom_version" ] || { echo "::error::no project version in pom.xml"; exit 1; }
-          pom_warp=$(sed -n 's:^    <warp-sql-jdbc.version>\(.*\)</warp-sql-jdbc.version>$:\1:p' pom.xml)
-          [ -n "$pom_warp" ] || { echo "::error::no warp-sql-jdbc.version in pom.xml"; exit 1; }
+          pom_chargewire=$(sed -n 's:^    <chargewire-jdbc.version>\(.*\)</chargewire-jdbc.version>$:\1:p' pom.xml)
+          [ -n "$pom_chargewire" ] || { echo "::error::no chargewire-jdbc.version in pom.xml"; exit 1; }
           if [ "$IS_TAG" = true ]; then
             version=$pom_version
             [ "v$version" = "$REF_NAME" ] || { echo "::error::tag $REF_NAME != v$version (pom.xml): set the release version in pom.xml before tagging"; exit 1; }
-            warp_version=$pom_warp
-            [[ $warp_version != *-SNAPSHOT ]] || { echo "::error::pom.xml's warp-sql-jdbc.version is $warp_version: a release must depend on a released Warp SQL JDBC driver"; exit 1; }
+            chargewire_version=$pom_chargewire
+            [[ $chargewire_version != *-SNAPSHOT ]] || { echo "::error::pom.xml's chargewire-jdbc.version is $chargewire_version: a release must depend on a released Chargewire JDBC driver"; exit 1; }
             upload=true
             auto_publish=true
           elif [ "$EVENT" = workflow_dispatch ]; then
             version=${INPUT_VERSION:-${pom_version%-SNAPSHOT}}
-            warp_version=${INPUT_WARP_VERSION:-${pom_warp%-SNAPSHOT}}
+            chargewire_version=${INPUT_CHARGEWIRE_VERSION:-${pom_chargewire%-SNAPSHOT}}
             upload=$INPUT_UPLOAD
             auto_publish=false
           else
             echo "::error::runs on v* tags and by hand only"; exit 1
           fi
-          for v in "$version" "$warp_version"; do
+          for v in "$version" "$chargewire_version"; do
             if ! [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || [[ $v == *SNAPSHOT* ]]; then
               echo "::error::'$v' is not a release version (X.Y.Z or X.Y.Z-rc.N)"; exit 1
             fi
           done
-          echo "version=$version warp_version=$warp_version upload=$upload auto_publish=$auto_publish"
+          echo "version=$version chargewire_version=$chargewire_version upload=$upload auto_publish=$auto_publish"
           {
             echo "version=$version"
-            echo "warp_version=$warp_version"
+            echo "chargewire_version=$chargewire_version"
             echo "upload=$upload"
             echo "auto_publish=$auto_publish"
           } >> "$GITHUB_OUTPUT"
@@ -144,32 +145,32 @@ jobs:
 
       # A tag waits up to an hour, so both drivers can be tagged together: Central takes a few
       # minutes to serve a release after publishing it. By hand, the submodule stands in.
-      - name: The Warp SQL JDBC driver on Maven Central
-        id: warp
+      - name: The Chargewire JDBC driver on Maven Central
+        id: chargewire
         env:
-          WARP_VERSION: ${{ steps.version.outputs.warp_version }}
+          CHARGEWIRE_VERSION: ${{ steps.version.outputs.chargewire_version }}
           IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           set -euo pipefail
-          url="https://repo1.maven.org/maven2/com/gizmodata/warp-sql-jdbc/$WARP_VERSION/warp-sql-jdbc-$WARP_VERSION.pom"
+          url="https://repo1.maven.org/maven2/com/gizmodata/chargewire-jdbc/$CHARGEWIRE_VERSION/chargewire-jdbc-$CHARGEWIRE_VERSION.pom"
           if [ "$IS_TAG" = true ]; then attempts=60; else attempts=1; fi
           for attempt in $(seq 1 "$attempts"); do
             code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "$url" || true)
             if [ "$code" = 200 ]; then
-              echo "com.gizmodata:warp-sql-jdbc:$WARP_VERSION is on Maven Central"
+              echo "com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION is on Maven Central"
               echo "from=central" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [ "$attempt" -lt "$attempts" ]; then
-              echo "com.gizmodata:warp-sql-jdbc:$WARP_VERSION not on Maven Central yet (HTTP $code); waiting ($attempt/$attempts)"
+              echo "com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION not on Maven Central yet (HTTP $code); waiting ($attempt/$attempts)"
               sleep 60
             fi
           done
           if [ "$IS_TAG" = true ]; then
-            echo "::error::com.gizmodata:warp-sql-jdbc:$WARP_VERSION is not on Maven Central after an hour: release warp-sql-jdbc v$WARP_VERSION first"
+            echo "::error::com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION is not on Maven Central after an hour: release chargewire-jdbc v$CHARGEWIRE_VERSION first"
             exit 1
           fi
-          echo "::notice::com.gizmodata:warp-sql-jdbc:$WARP_VERSION is not on Maven Central: building it from the submodule for this run"
+          echo "::notice::com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION is not on Maven Central: building it from the submodule for this run"
           echo "from=submodule" >> "$GITHUB_OUTPUT"
 
   tests:
@@ -191,8 +192,8 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.version }}
       UPLOAD: ${{ needs.preflight.outputs.upload }}
       AUTO_PUBLISH: ${{ needs.preflight.outputs.auto_publish }}
-      WARP_VERSION: ${{ needs.preflight.outputs.warp_version }}
-      WARP_FROM: ${{ needs.preflight.outputs.warp_from }}
+      CHARGEWIRE_VERSION: ${{ needs.preflight.outputs.chargewire_version }}
+      CHARGEWIRE_FROM: ${{ needs.preflight.outputs.chargewire_from }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -204,7 +205,7 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
-          DEPLOY_KEY: ${{ secrets.WARP_SQL_JDBC_DEPLOY_KEY }}
+          DEPLOY_KEY: ${{ secrets.CHARGEWIRE_JDBC_DEPLOY_KEY }}
         run: |
           missing=()
           [ -n "$GPG_PRIVATE_KEY" ] || missing+=(GPG_PRIVATE_KEY)
@@ -213,8 +214,8 @@ jobs:
             [ -n "$CENTRAL_TOKEN_USERNAME" ] || missing+=(CENTRAL_TOKEN_USERNAME)
             [ -n "$CENTRAL_TOKEN_PASSWORD" ] || missing+=(CENTRAL_TOKEN_PASSWORD)
           fi
-          if [ "$WARP_FROM" = submodule ]; then
-            [ -n "$DEPLOY_KEY" ] || missing+=(WARP_SQL_JDBC_DEPLOY_KEY)
+          if [ "$CHARGEWIRE_FROM" = submodule ]; then
+            [ -n "$DEPLOY_KEY" ] || missing+=(CHARGEWIRE_JDBC_DEPLOY_KEY)
           fi
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::missing secrets: ${missing[*]} (see the comment at the top of release.yml)"
@@ -254,24 +255,24 @@ jobs:
           server-username: CENTRAL_TOKEN_USERNAME
           server-password: CENTRAL_TOKEN_PASSWORD
 
-      # By hand only, before the Warp SQL driver is on Central: build it from the submodule at the
+      # By hand only, before the Chargewire driver is on Central: build it from the submodule at the
       # version this bundle will name (the dry run's stand-in; it is never uploaded).
-      - name: Build the Warp SQL JDBC driver from the submodule
-        if: env.WARP_FROM == 'submodule'
+      - name: Build the Chargewire JDBC driver from the submodule
+        if: env.CHARGEWIRE_FROM == 'submodule'
         env:
-          DEPLOY_KEY: ${{ secrets.WARP_SQL_JDBC_DEPLOY_KEY }}
+          DEPLOY_KEY: ${{ secrets.CHARGEWIRE_JDBC_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          key="$RUNNER_TEMP/warp_sql_jdbc_key"
+          key="$RUNNER_TEMP/chargewire_jdbc_key"
           printf '%s\n' "$DEPLOY_KEY" > "$key"
           chmod 600 "$key"
-          git -c url."ssh://git@github.com/gizmodata/warp-sql-jdbc".insteadOf=https://github.com/gizmodata/warp-sql-jdbc \
+          git -c url."ssh://git@github.com/gizmodata/chargewire-jdbc".insteadOf=https://github.com/gizmodata/chargewire-jdbc \
             -c core.sshCommand="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
             submodule update --init --depth 1
           rm -f "$key"
-          git -C third_party/warp-sql-jdbc log -1 --format='warp-sql-jdbc at %H %s'
-          mvn -B -ntp -q -f third_party/warp-sql-jdbc/pom.xml org.codehaus.mojo:versions-maven-plugin:2.23.0:set -DnewVersion="$WARP_VERSION" -DgenerateBackupPoms=false
-          mvn -B -ntp -f third_party/warp-sql-jdbc/pom.xml -DskipTests -DskipITs install
+          git -C third_party/chargewire-jdbc log -1 --format='chargewire-jdbc at %H %s'
+          mvn -B -ntp -q -f third_party/chargewire-jdbc/pom.xml org.codehaus.mojo:versions-maven-plugin:2.23.0:set -DnewVersion="$CHARGEWIRE_VERSION" -DgenerateBackupPoms=false
+          mvn -B -ntp -f third_party/chargewire-jdbc/pom.xml -DskipTests -DskipITs install
 
       - name: Set the versions
         run: |
@@ -280,12 +281,12 @@ jobs:
           if [ "$pom_version" != "$VERSION" ]; then
             mvn -B -ntp -q org.codehaus.mojo:versions-maven-plugin:2.23.0:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
           fi
-          pom_warp=$(sed -n 's:^    <warp-sql-jdbc.version>\(.*\)</warp-sql-jdbc.version>$:\1:p' pom.xml)
-          if [ "$pom_warp" != "$WARP_VERSION" ]; then
-            mvn -B -ntp -q org.codehaus.mojo:versions-maven-plugin:2.23.0:set-property -Dproperty=warp-sql-jdbc.version -DnewVersion="$WARP_VERSION" -DgenerateBackupPoms=false
+          pom_chargewire=$(sed -n 's:^    <chargewire-jdbc.version>\(.*\)</chargewire-jdbc.version>$:\1:p' pom.xml)
+          if [ "$pom_chargewire" != "$CHARGEWIRE_VERSION" ]; then
+            mvn -B -ntp -q org.codehaus.mojo:versions-maven-plugin:2.23.0:set-property -Dproperty=chargewire-jdbc.version -DnewVersion="$CHARGEWIRE_VERSION" -DgenerateBackupPoms=false
           fi
-          grep -q "<warp-sql-jdbc.version>$WARP_VERSION</warp-sql-jdbc.version>" pom.xml || { echo "::error::could not set warp-sql-jdbc.version"; exit 1; }
-          echo "building $GROUP_ID:$ARTIFACT_ID:$VERSION on com.gizmodata:warp-sql-jdbc:$WARP_VERSION ($WARP_FROM)"
+          grep -q "<chargewire-jdbc.version>$CHARGEWIRE_VERSION</chargewire-jdbc.version>" pom.xml || { echo "::error::could not set chargewire-jdbc.version"; exit 1; }
+          echo "building $GROUP_ID:$ARTIFACT_ID:$VERSION on com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION ($CHARGEWIRE_FROM)"
 
       # The unit tests run again; the integration tests ran in the tests job on this commit.
       - name: Build and sign the bundle
@@ -299,7 +300,7 @@ jobs:
 
       - name: Check the bundle
         run: >-
-          CENTRAL_BUNDLE_DEPENDENCIES="com.gizmodata:warp-sql-jdbc:$WARP_VERSION"
+          CENTRAL_BUNDLE_DEPENDENCIES="com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION"
           dev/check-central-bundle.sh target/central-publishing/central-bundle.zip "$GROUP_ID" "$ARTIFACT_ID" "$VERSION" "$SIGNING_KEY_FINGERPRINT"
 
       - uses: actions/upload-artifact@v7
@@ -326,7 +327,7 @@ jobs:
             -Dcentral.waitUntil="$wait_until" \
             -DwaitMaxTime=3600 \
             deploy
-          CENTRAL_BUNDLE_DEPENDENCIES="com.gizmodata:warp-sql-jdbc:$WARP_VERSION" \
+          CENTRAL_BUNDLE_DEPENDENCIES="com.gizmodata:chargewire-jdbc:$CHARGEWIRE_VERSION" \
             dev/check-central-bundle.sh target/central-publishing/central-bundle.zip "$GROUP_ID" "$ARTIFACT_ID" "$VERSION" "$SIGNING_KEY_FINGERPRINT"
           if [ "$AUTO_PUBLISH" != true ]; then
             echo "::notice::$GROUP_ID:$ARTIFACT_ID:$VERSION is validated and held on central.sonatype.com (Deployments): Publish or Drop it there"

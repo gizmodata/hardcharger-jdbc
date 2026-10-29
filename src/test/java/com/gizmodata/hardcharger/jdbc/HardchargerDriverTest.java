@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.gizmodata.warpsql.jdbc.WarpDriver;
+import com.gizmodata.chargewire.jdbc.ChargewireDriver;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Driver;
@@ -23,19 +23,19 @@ class HardchargerDriverTest {
   @Test
   void acceptsOnlyHardchargerUrls() {
     assertTrue(driver.acceptsURL("jdbc:hardcharger://127.0.0.1"));
-    assertFalse(driver.acceptsURL("jdbc:warp://127.0.0.1"));
+    assertFalse(driver.acceptsURL("jdbc:chargewire://127.0.0.1"));
     assertFalse(driver.acceptsURL("jdbc:hardcharger+http://127.0.0.1"));
   }
 
   @Test
   void connectAnswersNullForOtherUrls() throws SQLException {
-    assertNull(driver.connect("jdbc:warp://127.0.0.1:1", new Properties()));
+    assertNull(driver.connect("jdbc:chargewire://127.0.0.1:1", new Properties()));
   }
 
   @Test
   void driverManagerPicksTheDriverByScheme() throws SQLException {
     assertInstanceOf(HardchargerDriver.class, DriverManager.getDriver("jdbc:hardcharger://h"));
-    assertInstanceOf(WarpDriver.class, DriverManager.getDriver("jdbc:warp://h"));
+    assertInstanceOf(ChargewireDriver.class, DriverManager.getDriver("jdbc:chargewire://h"));
   }
 
   @Test
@@ -49,14 +49,14 @@ class HardchargerDriverTest {
   }
 
   @Test
-  void propertiesAreTheWarpDriversWithTheUrlOptionsApplied() throws SQLException {
+  void propertiesAreTheChargewireDriversWithTheUrlOptionsApplied() throws SQLException {
     DriverPropertyInfo[] ours =
         driver.getPropertyInfo("jdbc:hardcharger://h?useEncryption=false", new Properties());
-    DriverPropertyInfo[] warps =
-        new WarpDriver()
-            .getPropertyInfo("jdbc:warp://h:31337?useEncryption=false", new Properties());
+    DriverPropertyInfo[] chargewires =
+        new ChargewireDriver()
+            .getPropertyInfo("jdbc:chargewire://h:31337?useEncryption=false", new Properties());
     assertEquals(
-        Arrays.stream(warps).map(p -> p.name + "=" + p.value).toList(),
+        Arrays.stream(chargewires).map(p -> p.name + "=" + p.value).toList(),
         Arrays.stream(ours).map(p -> p.name + "=" + p.value).toList());
     DriverPropertyInfo encryption =
         Arrays.stream(ours).filter(p -> p.name.equals("useEncryption")).findFirst().orElseThrow();

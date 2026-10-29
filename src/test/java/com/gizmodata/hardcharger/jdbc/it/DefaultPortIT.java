@@ -54,12 +54,12 @@ class DefaultPortIT {
   }
 
   @Test
-  void theSameUrlWithTheWarpSchemeDoesNot() {
-    // jdbc:warp:// without a port means 80 over plain HTTP, where no server listens.
+  void theSameUrlWithTheChargewireSchemeDoesNot() {
+    // jdbc:chargewire:// without a port means 80 over plain HTTP, where no server listens.
     SQLException error =
         assertThrows(
             SQLException.class,
-            () -> DriverManager.getConnection("jdbc:warp://127.0.0.1", server.properties()));
+            () -> DriverManager.getConnection("jdbc:chargewire://127.0.0.1", server.properties()));
     assertTrue(
         error.getSQLState() != null && error.getSQLState().startsWith("08"),
         error.getSQLState() + " " + error.getMessage());

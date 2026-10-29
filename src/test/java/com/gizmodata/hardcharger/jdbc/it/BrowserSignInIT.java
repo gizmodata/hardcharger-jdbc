@@ -25,7 +25,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Browser sign-in through {@code jdbc:hardcharger://}: the Warp SQL driver's {@code authType}
+ * Browser sign-in through {@code jdbc:hardcharger://}: the Chargewire driver's {@code authType}
  * ({@code oauth_browser}, alias {@code external}), {@code oauthBrowser} and {@code oauthTimeout}
  * reach it unchanged, from the {@code Properties} and from the URL, against a hardcharger-server
  * whose identity provider is {@link MockIdentityProvider}. The "browser" is {@code curl}, which
@@ -157,7 +157,7 @@ class BrowserSignInIT {
     assertTrue(e.getMessage().contains("invalid_credentials"), e.getMessage());
   }
 
-  /** {@code oauthTimeout} reaches the Warp SQL driver: it gives up after that many seconds. */
+  /** {@code oauthTimeout} reaches the Chargewire driver: it gives up after that many seconds. */
   @Test
   void givesUpAfterTheTimeout() {
     long started = System.nanoTime();

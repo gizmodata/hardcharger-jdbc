@@ -8,10 +8,10 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 
 /**
- * The Warp SQL driver's {@link Connection} and {@link DatabaseMetaData}, as Hardcharger's: the
+ * The Chargewire driver's {@link Connection} and {@link DatabaseMetaData}, as Hardcharger's: the
  * metadata names this driver and its version and the {@code jdbc:hardcharger:} URL, and reads
- * indexes from Hardcharger's DuckDB catalogs. Other answers come from Warp SQL. {@code unwrap}
- * reaches the Warp SQL classes.
+ * indexes from Hardcharger's DuckDB catalogs. Other answers come from Chargewire. {@code unwrap}
+ * reaches the Chargewire classes.
  */
 final class Wrappers {
   private Wrappers() {}

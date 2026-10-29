@@ -6,7 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-/** Hardcharger index metadata, which Warp SQL has no dedicated metadata endpoint for. */
+/** Hardcharger index metadata, which Chargewire has no dedicated metadata endpoint for. */
 final class IndexMetadata {
   private IndexMetadata() {}
 

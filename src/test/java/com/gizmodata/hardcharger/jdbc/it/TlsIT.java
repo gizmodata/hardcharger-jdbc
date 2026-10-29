@@ -17,8 +17,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * TLS is on by default for jdbc:hardcharger://, as for jdbc:warp://. The certificates are
- * warp-sql-jdbc's throwaway test certificates (for 127.0.0.1 and localhost, signed by a test CA).
+ * TLS is on by default for jdbc:hardcharger://, as for jdbc:chargewire://. The certificates are
+ * chargewire-jdbc's throwaway test certificates (for 127.0.0.1 and localhost, signed by a test CA).
  */
 class TlsIT {
   private static HardchargerServer server;

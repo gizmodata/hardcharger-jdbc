@@ -24,8 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 /**
- * A small OpenID Connect identity provider for the browser sign-in tests (Warp SQL spec §4.3; the
- * same as warp-sql-jdbc's test provider): discovery, a JWKS, an authorization endpoint that
+ * A small OpenID Connect identity provider for the browser sign-in tests (Chargewire spec §4.3; the
+ * same as chargewire-jdbc's test provider): discovery, a JWKS, an authorization endpoint that
  * approves at once (redirecting the browser back to the server's callback with a code, as a
  * provider does after the person signs in) and a token endpoint that trades the code for an RS256
  * ID token. It checks the client id and secret, the redirect URI, single-use codes and PKCE (S256),

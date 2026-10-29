@@ -10,7 +10,7 @@
   <packaging>jar</packaging>
 
   <name>Hardcharger™ JDBC Driver</name>
-  <description>The JDBC driver for Hardcharger™: jdbc:hardcharger:// URLs on the Warp SQL JDBC driver.</description>
+  <description>The JDBC driver for Hardcharger™: jdbc:hardcharger:// URLs on the Chargewire JDBC driver.</description>
   <url>https://github.com/gizmodata/hardcharger-jdbc</url>
 
   <!-- Name, description, url, licenses, developers and scm are what Maven Central requires of
@@ -53,11 +53,12 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>17</maven.compiler.release>
 
-    <!-- The Warp SQL JDBC driver this one is built on. A -SNAPSHOT is built from the
-         third_party/warp-sql-jdbc submodule (mvn -f third_party/warp-sql-jdbc/pom.xml -DskipTests
-         -DskipITs install; CI checks the two versions match); a release comes from Maven Central,
-         and a release of this driver must name one (release.yml checks it is published). -->
-    <warp-sql-jdbc.version>1.0.0</warp-sql-jdbc.version>
+    <!-- The Chargewire JDBC driver this one is built on. A -SNAPSHOT is built from the
+         third_party/chargewire-jdbc submodule (mvn -f third_party/chargewire-jdbc/pom.xml
+         -DskipTests -DskipITs install; CI checks the two versions match); a release comes from
+         Maven Central, and a release of this driver must name one (release.yml checks it is
+         published). -->
+    <chargewire-jdbc.version>1.0.0</chargewire-jdbc.version>
     <junit.version>6.1.3</junit.version>
     <!-- Not the newest: Spotless on JDK 17, the build's JDK, allows google-java-format 1.28.0 at most. -->
     <google-java-format.version>1.28.0</google-java-format.version>
@@ -90,8 +91,8 @@
   <dependencies>
     <dependency>
       <groupId>com.gizmodata</groupId>
-      <artifactId>warp-sql-jdbc</artifactId>
-      <version>${warp-sql-jdbc.version}</version>
+      <artifactId>chargewire-jdbc</artifactId>
+      <version>${chargewire-jdbc.version}</version>
     </dependency>
 
     <dependency>
@@ -255,8 +256,9 @@
         </configuration>
       </plugin>
 
-      <!-- The standalone jar: this driver, the Warp SQL JDBC driver and its dependencies, with the
-           Warp SQL driver's own relocations, so it is one file for DBeaver and other BI tools. -->
+      <!-- The standalone jar: this driver, the Chargewire JDBC driver and its dependencies, with
+           the Chargewire driver's own relocations, so it is one file for DBeaver and other BI
+           tools. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -273,27 +275,27 @@
               <relocations>
                 <relocation>
                   <pattern>org.apache.arrow</pattern>
-                  <shadedPattern>com.gizmodata.warpsql.jdbc.shaded.org.apache.arrow</shadedPattern>
+                  <shadedPattern>com.gizmodata.chargewire.jdbc.shaded.org.apache.arrow</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.fasterxml.jackson</pattern>
-                  <shadedPattern>com.gizmodata.warpsql.jdbc.shaded.com.fasterxml.jackson</shadedPattern>
+                  <shadedPattern>com.gizmodata.chargewire.jdbc.shaded.com.fasterxml.jackson</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.google.flatbuffers</pattern>
-                  <shadedPattern>com.gizmodata.warpsql.jdbc.shaded.com.google.flatbuffers</shadedPattern>
+                  <shadedPattern>com.gizmodata.chargewire.jdbc.shaded.com.google.flatbuffers</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.commons</pattern>
-                  <shadedPattern>com.gizmodata.warpsql.jdbc.shaded.org.apache.commons</shadedPattern>
+                  <shadedPattern>com.gizmodata.chargewire.jdbc.shaded.org.apache.commons</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.slf4j</pattern>
-                  <shadedPattern>com.gizmodata.warpsql.jdbc.shaded.org.slf4j</shadedPattern>
+                  <shadedPattern>com.gizmodata.chargewire.jdbc.shaded.org.slf4j</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.immutables</pattern>
-                  <shadedPattern>com.gizmodata.warpsql.jdbc.shaded.org.immutables</shadedPattern>
+                  <shadedPattern>com.gizmodata.chargewire.jdbc.shaded.org.immutables</shadedPattern>
                 </relocation>
                 <!-- zstd-jni is not relocated: its JNI symbols name its own package. -->
               </relocations>
@@ -341,7 +343,7 @@
             <project.version>${project.version}</project.version>
           </systemPropertyVariables>
           <classpathDependencyExcludes>
-            <classpathDependencyExclude>com.gizmodata:warp-sql-jdbc</classpathDependencyExclude>
+            <classpathDependencyExclude>com.gizmodata:chargewire-jdbc</classpathDependencyExclude>
           </classpathDependencyExcludes>
           <classpathDependencyScopeExclude>runtime</classpathDependencyScopeExclude>
         </configuration>

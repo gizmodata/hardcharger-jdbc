@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.gizmodata.warpsql.jdbc.WarpConnection;
-import com.gizmodata.warpsql.jdbc.WarpConnection.TransactionState;
+import com.gizmodata.chargewire.jdbc.ChargewireConnection;
+import com.gizmodata.chargewire.jdbc.ChargewireConnection.TransactionState;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,7 +16,7 @@ import java.sql.Statement;
 import org.junit.jupiter.api.Test;
 
 /**
- * Warp SQL 1.0.0 through {@code jdbc:hardcharger://}, against a real hardcharger-server: what the
+ * Chargewire 1.0.0 through {@code jdbc:hardcharger://}, against a real hardcharger-server: what the
  * driver reads from the server's own documents.
  */
 class ProtocolV1IT {
@@ -29,12 +29,12 @@ class ProtocolV1IT {
     try (HardchargerServer server = HardchargerServer.start();
         Connection connection = DriverManager.getConnection(server.url(""), server.properties());
         Statement statement = connection.createStatement()) {
-      WarpConnection warp = connection.unwrap(WarpConnection.class);
-      assertEquals(TransactionState.NONE, warp.getTransactionState());
+      ChargewireConnection chargewire = connection.unwrap(ChargewireConnection.class);
+      assertEquals(TransactionState.NONE, chargewire.getTransactionState());
       statement.execute("BEGIN TRANSACTION");
-      assertEquals(TransactionState.OPEN, warp.getTransactionState());
+      assertEquals(TransactionState.OPEN, chargewire.getTransactionState());
       statement.execute("ROLLBACK");
-      assertEquals(TransactionState.NONE, warp.getTransactionState());
+      assertEquals(TransactionState.NONE, chargewire.getTransactionState());
     }
   }
 

@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gizmodata.chargewire.jdbc.ChargewireConnection;
+import com.gizmodata.chargewire.jdbc.ChargewireDriver;
+import com.gizmodata.chargewire.jdbc.ChargewireProblem;
 import com.gizmodata.hardcharger.jdbc.HardchargerDriver;
-import com.gizmodata.warpsql.jdbc.WarpConnection;
-import com.gizmodata.warpsql.jdbc.WarpDriver;
-import com.gizmodata.warpsql.jdbc.WarpProblem;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -68,7 +68,7 @@ class ConnectionIT {
   }
 
   @Test
-  void urlOptionsWorkAsInWarpSql() throws SQLException {
+  void urlOptionsWorkAsInChargewire() throws SQLException {
     // useEncryption in the URL instead of the properties.
     Properties properties = server.properties();
     properties.remove("useEncryption");
@@ -95,7 +95,7 @@ class ConnectionIT {
       assertEquals(server.url(""), metaData.getURL());
       assertSame(connection, metaData.getConnection());
       assertEquals(HardchargerServer.USER, metaData.getUserName());
-      // The rest of the metadata works as the Warp SQL driver's.
+      // The rest of the metadata works as the Chargewire driver's.
       try (ResultSet catalogs = metaData.getCatalogs()) {
         assertTrue(catalogs.next());
       }
@@ -115,11 +115,11 @@ class ConnectionIT {
   }
 
   @Test
-  void unwrapReachesTheWarpSqlConnection() throws SQLException {
+  void unwrapReachesTheChargewireConnection() throws SQLException {
     try (Connection connection = connect()) {
-      assertTrue(connection.isWrapperFor(WarpConnection.class));
-      WarpConnection warp = connection.unwrap(WarpConnection.class);
-      assertNotNull(warp.getSessionId());
+      assertTrue(connection.isWrapperFor(ChargewireConnection.class));
+      ChargewireConnection chargewire = connection.unwrap(ChargewireConnection.class);
+      assertNotNull(chargewire.getSessionId());
       assertSame(connection, connection.unwrap(Connection.class));
       assertTrue(connection.getMetaData().isWrapperFor(DatabaseMetaData.class));
     }
@@ -129,11 +129,13 @@ class ConnectionIT {
   void driverManagerPicksTheDriverByScheme() throws SQLException {
     assertInstanceOf(HardchargerDriver.class, DriverManager.getDriver(server.url("")));
     assertInstanceOf(
-        WarpDriver.class, DriverManager.getDriver("jdbc:warp://127.0.0.1:" + server.port));
-    try (Connection warp =
-        DriverManager.getConnection("jdbc:warp://127.0.0.1:" + server.port, server.properties())) {
-      assertEquals("Warp SQL JDBC Driver", warp.getMetaData().getDriverName());
-      assertEquals("Hardcharger", warp.getMetaData().getDatabaseProductName());
+        ChargewireDriver.class,
+        DriverManager.getDriver("jdbc:chargewire://127.0.0.1:" + server.port));
+    try (Connection chargewire =
+        DriverManager.getConnection(
+            "jdbc:chargewire://127.0.0.1:" + server.port, server.properties())) {
+      assertEquals("Chargewire JDBC Driver", chargewire.getMetaData().getDriverName());
+      assertEquals("Hardcharger", chargewire.getMetaData().getDatabaseProductName());
     }
     try (Connection ours = connect()) {
       assertEquals("Hardcharger JDBC Driver", ours.getMetaData().getDriverName());
@@ -158,7 +160,7 @@ class ConnectionIT {
                 DriverManager.getConnection(
                     "jdbc:hardcharger://127.0.0.1:" + server.port + "/no_such_catalog",
                     server.properties()));
-    assertEquals("invalid_option_value", WarpProblem.codeOf(error), error.getMessage());
+    assertEquals("invalid_option_value", ChargewireProblem.codeOf(error), error.getMessage());
   }
 
   @Test
@@ -172,7 +174,7 @@ class ConnectionIT {
               SQLInvalidAuthorizationSpecException.class,
               () -> DriverManager.getConnection(server.url(""), properties));
       assertEquals("28000", error.getSQLState());
-      assertEquals("invalid_credentials", WarpProblem.codeOf(error));
+      assertEquals("invalid_credentials", ChargewireProblem.codeOf(error));
     }
   }
 
@@ -211,7 +213,7 @@ class ConnectionIT {
 
   @Test
   void hardchargerPlusHttpIsNotAScheme() {
-    // Plain HTTP is useEncryption=false, as for jdbc:warp://.
+    // Plain HTTP is useEncryption=false, as for jdbc:chargewire://.
     SQLException error =
         assertThrows(
             SQLException.class,

@@ -4,13 +4,14 @@ name: CI
 # gate (release.yml calls this workflow on the tagged commit). The integration tests run against a
 # real hardcharger-server release and fail, never skip, without one.
 #
-# The Warp SQL JDBC driver (pom.xml's warp-sql-jdbc.version): a -SNAPSHOT is built from the
-# third_party/warp-sql-jdbc submodule, which must be at that version; a release comes from Maven
+# The Chargewire JDBC driver (pom.xml's chargewire-jdbc.version): a -SNAPSHOT is built from the
+# third_party/chargewire-jdbc submodule, which must be at that version; a release comes from Maven
 # Central, and the job fails if Central doesn't have it.
 #
 # Access, with no personal token:
-#   - the third_party/warp-sql-jdbc submodule (gizmodata/warp-sql-jdbc, internal), for a -SNAPSHOT
-#     only, through the WARP_SQL_JDBC_DEPLOY_KEY secret, a read-only deploy key of that repository;
+#   - the third_party/chargewire-jdbc submodule (gizmodata/chargewire-jdbc, internal), for a
+#     -SNAPSHOT only, through the CHARGEWIRE_JDBC_DEPLOY_KEY secret, a read-only deploy key of that
+#     repository;
 #   - hardcharger-server from the private image ghcr.io/gizmodata/hardcharger, pulled with this
 #     workflow's GITHUB_TOKEN; the package grants this repository read access (package
 #     settings, Manage Actions access).
@@ -24,7 +25,7 @@ on:
   workflow_dispatch:
   workflow_call:
     secrets:
-      WARP_SQL_JDBC_DEPLOY_KEY:
+      CHARGEWIRE_JDBC_DEPLOY_KEY:
         required: false
 
 permissions:
@@ -57,48 +58,48 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Where the Warp SQL JDBC driver comes from
-        id: warp
+      - name: Where the Chargewire JDBC driver comes from
+        id: chargewire
         run: |
           set -euo pipefail
-          version=$(sed -n 's:^    <warp-sql-jdbc.version>\(.*\)</warp-sql-jdbc.version>$:\1:p' pom.xml)
-          [ -n "$version" ] || { echo "::error::no warp-sql-jdbc.version in pom.xml"; exit 1; }
+          version=$(sed -n 's:^    <chargewire-jdbc.version>\(.*\)</chargewire-jdbc.version>$:\1:p' pom.xml)
+          [ -n "$version" ] || { echo "::error::no chargewire-jdbc.version in pom.xml"; exit 1; }
           case "$version" in
             *-SNAPSHOT) from=submodule ;;
             *) from=central ;;
           esac
-          echo "warp-sql-jdbc $version from $from"
+          echo "chargewire-jdbc $version from $from"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "from=$from" >> "$GITHUB_OUTPUT"
 
-      - name: Check Maven Central has the Warp SQL JDBC driver
-        if: steps.warp.outputs.from == 'central'
+      - name: Check Maven Central has the Chargewire JDBC driver
+        if: steps.chargewire.outputs.from == 'central'
         env:
-          VERSION: ${{ steps.warp.outputs.version }}
+          VERSION: ${{ steps.chargewire.outputs.version }}
         run: |
           set -euo pipefail
-          url="https://repo1.maven.org/maven2/com/gizmodata/warp-sql-jdbc/$VERSION/warp-sql-jdbc-$VERSION.pom"
+          url="https://repo1.maven.org/maven2/com/gizmodata/chargewire-jdbc/$VERSION/chargewire-jdbc-$VERSION.pom"
           code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "$url")
-          [ "$code" = 200 ] || { echo "::error::com.gizmodata:warp-sql-jdbc:$VERSION is not on Maven Central (HTTP $code): release it first, or name a -SNAPSHOT built from the submodule"; exit 1; }
+          [ "$code" = 200 ] || { echo "::error::com.gizmodata:chargewire-jdbc:$VERSION is not on Maven Central (HTTP $code): release it first, or name a -SNAPSHOT built from the submodule"; exit 1; }
 
-      # The submodule over SSH with warp-sql-jdbc's read-only deploy key.
-      - name: Fetch the warp-sql-jdbc submodule
-        if: steps.warp.outputs.from == 'submodule'
+      # The submodule over SSH with chargewire-jdbc's read-only deploy key.
+      - name: Fetch the chargewire-jdbc submodule
+        if: steps.chargewire.outputs.from == 'submodule'
         env:
-          DEPLOY_KEY: ${{ secrets.WARP_SQL_JDBC_DEPLOY_KEY }}
+          DEPLOY_KEY: ${{ secrets.CHARGEWIRE_JDBC_DEPLOY_KEY }}
         run: |
           if [ -z "$DEPLOY_KEY" ]; then
-            echo "::error::the WARP_SQL_JDBC_DEPLOY_KEY secret is not set: the private key of a read-only deploy key of gizmodata/warp-sql-jdbc"
+            echo "::error::the CHARGEWIRE_JDBC_DEPLOY_KEY secret is not set: the private key of a read-only deploy key of gizmodata/chargewire-jdbc"
             exit 1
           fi
-          key="$RUNNER_TEMP/warp_sql_jdbc_key"
+          key="$RUNNER_TEMP/chargewire_jdbc_key"
           printf '%s\n' "$DEPLOY_KEY" > "$key"
           chmod 600 "$key"
-          git -c url."ssh://git@github.com/gizmodata/warp-sql-jdbc".insteadOf=https://github.com/gizmodata/warp-sql-jdbc \
+          git -c url."ssh://git@github.com/gizmodata/chargewire-jdbc".insteadOf=https://github.com/gizmodata/chargewire-jdbc \
             -c core.sshCommand="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
             submodule update --init --depth 1
           rm -f "$key"
-          git -C third_party/warp-sql-jdbc log -1 --format='warp-sql-jdbc at %H %s'
+          git -C third_party/chargewire-jdbc log -1 --format='chargewire-jdbc at %H %s'
 
       - uses: actions/setup-java@v6
         with:
@@ -106,15 +107,15 @@ jobs:
           java-version: ${{ matrix.jdk }}
           cache: maven
 
-      - name: Install the Warp SQL JDBC driver from the submodule
-        if: steps.warp.outputs.from == 'submodule'
+      - name: Install the Chargewire JDBC driver from the submodule
+        if: steps.chargewire.outputs.from == 'submodule'
         env:
-          VERSION: ${{ steps.warp.outputs.version }}
+          VERSION: ${{ steps.chargewire.outputs.version }}
         run: |
           set -euo pipefail
-          have=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' third_party/warp-sql-jdbc/pom.xml | head -1)
-          [ "$have" = "$VERSION" ] || { echo "::error::pom.xml wants warp-sql-jdbc $VERSION, the submodule is $have: repin it or change warp-sql-jdbc.version"; exit 1; }
-          mvn -B -ntp -f third_party/warp-sql-jdbc/pom.xml -DskipTests -DskipITs install
+          have=$(sed -n 's:^  <version>\(.*\)</version>$:\1:p' third_party/chargewire-jdbc/pom.xml | head -1)
+          [ "$have" = "$VERSION" ] || { echo "::error::pom.xml wants chargewire-jdbc $VERSION, the submodule is $have: repin it or change chargewire-jdbc.version"; exit 1; }
+          mvn -B -ntp -f third_party/chargewire-jdbc/pom.xml -DskipTests -DskipITs install
 
       - uses: ./.github/actions/hardcharger-server
         with:
@@ -135,7 +136,7 @@ jobs:
           jar tf target/hardcharger-jdbc.jar > entries.txt
           unzip -p target/hardcharger-jdbc.jar META-INF/services/java.sql.Driver > drivers.txt
           grep -qx 'com.gizmodata.hardcharger.jdbc.HardchargerDriver' drivers.txt
-          grep -qx 'com.gizmodata.warpsql.jdbc.WarpDriver' drivers.txt
+          grep -qx 'com.gizmodata.chargewire.jdbc.ChargewireDriver' drivers.txt
           # Every dependency is relocated except zstd-jni, whose JNI symbols name its package.
           if grep -E '^(org|com/fasterxml|com/google)/' entries.txt; then
             echo "::error::unrelocated classes in the standalone jar"

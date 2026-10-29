@@ -2,7 +2,7 @@ package com.gizmodata.hardcharger.jdbc.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.gizmodata.warpsql.jdbc.WarpStatement;
+import com.gizmodata.chargewire.jdbc.ChargewireStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -13,7 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * The driver inherits warp-sql-jdbc's default of reading a large result in up to 32 partitions at
+ * The driver inherits chargewire-jdbc's default of reading a large result in up to 32 partitions at
  * once (spec §6.10; the server sizes the split by the result), and a result read that way keeps its
  * rows and order.
  */
@@ -34,7 +34,7 @@ class PartitionsIT {
     try (Connection connection =
             DriverManager.getConnection(server.url(options), server.properties());
         Statement statement = connection.createStatement()) {
-      return statement.unwrap(WarpStatement.class).getResultPartitions();
+      return statement.unwrap(ChargewireStatement.class).getResultPartitions();
     }
   }
 
