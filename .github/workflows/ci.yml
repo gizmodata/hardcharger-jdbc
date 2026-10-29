@@ -6,11 +6,12 @@ name: CI
 #
 # The Chargewire JDBC driver (pom.xml's chargewire-jdbc.version): a -SNAPSHOT is built from the
 # third_party/chargewire-jdbc submodule, which must be at that version; a release comes from Maven
-# Central, and the job fails if Central doesn't have it.
+# Central, and the job fails if Central doesn't have it, except in a run by hand (release.yml's dry
+# run before chargewire-jdbc is published), which then builds it from the submodule.
 #
 # Access, with no personal token:
 #   - the third_party/chargewire-jdbc submodule (gizmodata/chargewire-jdbc, public), for a
-#     -SNAPSHOT only, fetched anonymously;
+#     -SNAPSHOT (or an unpublished release in a run by hand) only, fetched anonymously;
 #   - hardcharger-server from the private image ghcr.io/gizmodata/hardcharger, pulled with this
 #     workflow's GITHUB_TOKEN; the package grants this repository read access (package
 #     settings, Manage Actions access).
@@ -59,6 +60,8 @@ jobs:
 
       - name: Where the Chargewire JDBC driver comes from
         id: chargewire
+        env:
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           version=$(sed -n 's:^    <chargewire-jdbc.version>\(.*\)</chargewire-jdbc.version>$:\1:p' pom.xml)
@@ -67,6 +70,14 @@ jobs:
             *-SNAPSHOT) from=submodule ;;
             *) from=central ;;
           esac
+          if [ "$from" = central ] && [ "$EVENT" = workflow_dispatch ]; then
+            url="https://repo1.maven.org/maven2/com/gizmodata/chargewire-jdbc/$version/chargewire-jdbc-$version.pom"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "$url")
+            if [ "$code" = 404 ]; then
+              from=submodule
+              echo "::notice::chargewire-jdbc $version is not on Maven Central yet: this run by hand builds it from the submodule"
+            fi
+          fi
           echo "chargewire-jdbc $version from $from"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "from=$from" >> "$GITHUB_OUTPUT"
