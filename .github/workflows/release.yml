@@ -21,8 +21,7 @@ name: release
 # Secrets (environment "production"): CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD, a Central
 # Portal user token (central.sonatype.com, View Account, Generate User Token); GPG_PRIVATE_KEY, the
 # ASCII-armored secret signing key, and GPG_PASSPHRASE. The key must be the one named below, and
-# its public half on keyserver.ubuntu.com, where Central looks it up. CHARGEWIRE_JDBC_DEPLOY_KEY
-# (repo secret) while the Chargewire driver comes from the internal submodule.
+# its public half on keyserver.ubuntu.com, where Central looks it up.
 
 on:
   push:
@@ -205,7 +204,6 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
-          DEPLOY_KEY: ${{ secrets.CHARGEWIRE_JDBC_DEPLOY_KEY }}
         run: |
           missing=()
           [ -n "$GPG_PRIVATE_KEY" ] || missing+=(GPG_PRIVATE_KEY)
@@ -213,9 +211,6 @@ jobs:
           if [ "$UPLOAD" = true ]; then
             [ -n "$CENTRAL_TOKEN_USERNAME" ] || missing+=(CENTRAL_TOKEN_USERNAME)
             [ -n "$CENTRAL_TOKEN_PASSWORD" ] || missing+=(CENTRAL_TOKEN_PASSWORD)
-          fi
-          if [ "$CHARGEWIRE_FROM" = submodule ]; then
-            [ -n "$DEPLOY_KEY" ] || missing+=(CHARGEWIRE_JDBC_DEPLOY_KEY)
           fi
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::missing secrets: ${missing[*]} (see the comment at the top of release.yml)"
@@ -259,17 +254,9 @@ jobs:
       # version this bundle will name (the dry run's stand-in; it is never uploaded).
       - name: Build the Chargewire JDBC driver from the submodule
         if: env.CHARGEWIRE_FROM == 'submodule'
-        env:
-          DEPLOY_KEY: ${{ secrets.CHARGEWIRE_JDBC_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          key="$RUNNER_TEMP/chargewire_jdbc_key"
-          printf '%s\n' "$DEPLOY_KEY" > "$key"
-          chmod 600 "$key"
-          git -c url."ssh://git@github.com/gizmodata/chargewire-jdbc".insteadOf=https://github.com/gizmodata/chargewire-jdbc \
-            -c core.sshCommand="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-            submodule update --init --depth 1
-          rm -f "$key"
+          git submodule update --init --depth 1
           git -C third_party/chargewire-jdbc log -1 --format='chargewire-jdbc at %H %s'
           mvn -B -ntp -q -f third_party/chargewire-jdbc/pom.xml org.codehaus.mojo:versions-maven-plugin:2.23.0:set -DnewVersion="$CHARGEWIRE_VERSION" -DgenerateBackupPoms=false
           mvn -B -ntp -f third_party/chargewire-jdbc/pom.xml -DskipTests -DskipITs install

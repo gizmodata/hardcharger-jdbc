@@ -248,11 +248,10 @@ CI runs both on JDK 17 and 21 against `hardcharger-server` from the image named 
 `.github/workflows/ci.yml` (`ghcr.io/gizmodata/hardcharger:main`, Hardcharger's main branch;
 pin a `:sha-<short>` tag to reproduce a run; pulled with the workflow's
 `GITHUB_TOKEN`; the package grants this repository read access), and `LegacyCompatibilityIT`
-against a container of `ghcr.io/gizmodata/hardcharger:2.2.0`. While the repositories are
-internal, CI fetches the submodule (for a `-SNAPSHOT` `chargewire-jdbc.version`, which must match
-the submodule's version) with `CHARGEWIRE_JDBC_DEPLOY_KEY`, a read-only deploy key of
-`gizmodata/chargewire-jdbc`. For a released version it checks Maven Central has it and uses that. No
-personal token is involved.
+against a container of `ghcr.io/gizmodata/hardcharger:2.2.0`. For a `-SNAPSHOT`
+`chargewire-jdbc.version`, which must match the submodule's version, CI builds the driver from the
+submodule; for a released version it checks Maven Central has it and uses that. No personal token
+is involved.
 
 Formatting is google-java-format, checked by Spotless: `mvn spotless:apply` (on JDK 17).
 

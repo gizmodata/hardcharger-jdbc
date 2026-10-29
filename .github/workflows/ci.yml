@@ -9,9 +9,8 @@ name: CI
 # Central, and the job fails if Central doesn't have it.
 #
 # Access, with no personal token:
-#   - the third_party/chargewire-jdbc submodule (gizmodata/chargewire-jdbc, internal), for a
-#     -SNAPSHOT only, through the CHARGEWIRE_JDBC_DEPLOY_KEY secret, a read-only deploy key of that
-#     repository;
+#   - the third_party/chargewire-jdbc submodule (gizmodata/chargewire-jdbc, public), for a
+#     -SNAPSHOT only, fetched anonymously;
 #   - hardcharger-server from the private image ghcr.io/gizmodata/hardcharger, pulled with this
 #     workflow's GITHUB_TOKEN; the package grants this repository read access (package
 #     settings, Manage Actions access).
@@ -24,9 +23,6 @@ on:
     paths-ignore: ["**/*.md", "docs/**"]
   workflow_dispatch:
   workflow_call:
-    secrets:
-      CHARGEWIRE_JDBC_DEPLOY_KEY:
-        required: false
 
 permissions:
   contents: read
@@ -85,23 +81,11 @@ jobs:
           code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 "$url")
           [ "$code" = 200 ] || { echo "::error::com.gizmodata:chargewire-jdbc:$VERSION is not on Maven Central (HTTP $code): release it first, or name a -SNAPSHOT built from the submodule"; exit 1; }
 
-      # The submodule over SSH with chargewire-jdbc's read-only deploy key.
       - name: Fetch the chargewire-jdbc submodule
         if: steps.chargewire.outputs.from == 'submodule'
-        env:
-          DEPLOY_KEY: ${{ secrets.CHARGEWIRE_JDBC_DEPLOY_KEY }}
         run: |
-          if [ -z "$DEPLOY_KEY" ]; then
-            echo "::error::the CHARGEWIRE_JDBC_DEPLOY_KEY secret is not set: the private key of a read-only deploy key of gizmodata/chargewire-jdbc"
-            exit 1
-          fi
-          key="$RUNNER_TEMP/chargewire_jdbc_key"
-          printf '%s\n' "$DEPLOY_KEY" > "$key"
-          chmod 600 "$key"
-          git -c url."ssh://git@github.com/gizmodata/chargewire-jdbc".insteadOf=https://github.com/gizmodata/chargewire-jdbc \
-            -c core.sshCommand="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
-            submodule update --init --depth 1
-          rm -f "$key"
+          set -euo pipefail
+          git submodule update --init --depth 1
           git -C third_party/chargewire-jdbc log -1 --format='chargewire-jdbc at %H %s'
 
       - uses: actions/setup-java@v6

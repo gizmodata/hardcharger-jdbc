@@ -19,7 +19,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `com.gizmodata.chargewire.jdbc.shaded`.
 - The driver still works with Hardcharger servers released before the rename (2.2.0 and earlier):
   at the default `basePath` it falls back to such a server's spelling of the protocol.
-- CI reads the submodule with the `CHARGEWIRE_JDBC_DEPLOY_KEY` secret.
+- CI fetches the submodule anonymously (the driver's repository is public) and needs no deploy key.
 
 ### Added
 
