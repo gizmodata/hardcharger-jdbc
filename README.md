@@ -31,7 +31,8 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.0.1**, published on Maven Central. Compatible with Hardcharger 2.0.0.
+**Current release: 2.1.0**, published on Maven Central. Compatible with Hardcharger 2.3.0, and with
+servers from before the protocol's rename (2.2.0 and earlier).
 
 ## 📦 Install
 
@@ -41,14 +42,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.0.1</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.0.1'
+implementation 'com.gizmodata:hardcharger-jdbc:2.1.0'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything

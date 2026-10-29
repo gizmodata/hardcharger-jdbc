@@ -7,10 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-29
+
 ### Changed
 
 - The protocol Hardcharger speaks is now called Chargewire, and this driver is built on the
-  Chargewire JDBC driver (`com.gizmodata:chargewire-jdbc`, package `com.gizmodata.chargewire.jdbc`).
+  Chargewire JDBC driver 2.0.0 (`com.gizmodata:chargewire-jdbc`, package `com.gizmodata.chargewire.jdbc`).
   `jdbc:hardcharger://` URLs, their options and `HardchargerDriver` are unchanged, and connection
   URLs written for earlier versions keep working. Code that reaches the underlying driver uses its
   new class names: `unwrap(ChargewireConnection.class)`, `ChargewireProblem.codeOf(error)`, and
