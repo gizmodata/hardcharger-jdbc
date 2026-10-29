@@ -44,6 +44,9 @@ env:
   # on every green push (:main, and :sha-<short> for a fixed build). :main so the driver keeps up
   # with the server; pin a :sha- here to reproduce an old run.
   HARDCHARGER_IMAGE: ghcr.io/gizmodata/hardcharger:main
+  # The last release before the protocol's rename to Chargewire: LegacyCompatibilityIT checks the
+  # driver still works with it.
+  HARDCHARGER_LEGACY_IMAGE: ghcr.io/gizmodata/hardcharger:2.2.0
 
 jobs:
   test:
@@ -122,6 +125,38 @@ jobs:
           image: ${{ env.HARDCHARGER_IMAGE }}
           token: ${{ github.token }}
 
+      # Plain HTTP on 127.0.0.1:41337 with a fresh administrator password; it answers 404 at
+      # /chargewire, its discovery being under the former root.
+      - name: Start a Hardcharger server from before the rename
+        env:
+          IMAGE: ${{ env.HARDCHARGER_LEGACY_IMAGE }}
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          password=$(openssl rand -hex 16)
+          echo "::add-mask::$password"
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          if ! docker pull -q "$IMAGE"; then
+            echo "::error::can't pull $IMAGE with this workflow's GITHUB_TOKEN"
+            exit 1
+          fi
+          docker logout ghcr.io >/dev/null
+          HARDCHARGER_ADMIN_PASSWORD=$password docker run -d --name hardcharger-legacy \
+            -p 127.0.0.1:41337:31337 -e HARDCHARGER_ADMIN_PASSWORD "$IMAGE" >/dev/null
+          code=
+          for _ in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:41337/chargewire || true)
+            [ "$code" = 404 ] && break
+            sleep 1
+          done
+          if [ "$code" != 404 ]; then
+            docker logs hardcharger-legacy 2>&1 | tail -50
+            echo "::error::$IMAGE did not answer on 127.0.0.1:41337 (HTTP '$code' at /chargewire)"
+            exit 1
+          fi
+          echo "HARDCHARGER_JDBC_TEST_LEGACY_SERVER=127.0.0.1:41337" >> "$GITHUB_ENV"
+          echo "HARDCHARGER_JDBC_TEST_LEGACY_SERVER_PASSWORD=$password" >> "$GITHUB_ENV"
+
       - name: Unit and integration tests
         run: mvn -B -ntp verify
 
@@ -145,7 +180,9 @@ jobs:
 
       - name: Server log of a failed run
         if: failure()
-        run: find /tmp -name server.log -path '*hardcharger-jdbc-server*' -exec tail -50 {} \; || true
+        run: |
+          find /tmp -name server.log -path '*hardcharger-jdbc-server*' -exec tail -50 {} \; || true
+          docker logs hardcharger-legacy 2>&1 | tail -50 || true
 
       - uses: actions/upload-artifact@v7
         if: matrix.jdk == 17

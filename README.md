@@ -223,10 +223,21 @@ contains `:` and `@`, an empty home directory, and only `PATH`, `HOME`, `TMPDIR`
 `HARDCHARGER_ADMIN_PASSWORD` in its environment:
 
 ```bash
-HARDCHARGER_JDBC_TEST_SERVER_BINARY=/path/to/hardcharger-server mvn verify
+docker run -d --name hardcharger-legacy -p 127.0.0.1:41337:31337 \
+  -e HARDCHARGER_ADMIN_PASSWORD="$LEGACY_PASSWORD" ghcr.io/gizmodata/hardcharger:2.2.0
+HARDCHARGER_JDBC_TEST_SERVER_BINARY=/path/to/hardcharger-server \
+  HARDCHARGER_JDBC_TEST_LEGACY_SERVER=127.0.0.1:41337 \
+  HARDCHARGER_JDBC_TEST_LEGACY_SERVER_PASSWORD="$LEGACY_PASSWORD" \
+  mvn verify
 ```
 
-Without the variable they fail; they never skip. One test starts a server on 31337 to prove a URL
+`LegacyCompatibilityIT` also connects to a server released before the protocol was renamed
+Chargewire (Hardcharger 2.2.0 or earlier, plain HTTP, user `hardcharger` unless
+`HARDCHARGER_JDBC_TEST_LEGACY_SERVER_USER` names another), named by
+`HARDCHARGER_JDBC_TEST_LEGACY_SERVER` (`host:port`) and
+`HARDCHARGER_JDBC_TEST_LEGACY_SERVER_PASSWORD`, and checks that it is one.
+
+Without the variables they fail; they never skip. One test starts a server on 31337 to prove a URL
 without a port reaches it, and fails if anything else holds that port. They run against
 `target/hardcharger-jdbc.jar` with no other dependency on the class path, so they also prove the
 standalone jar is self-contained. Negative tests assert the SQLState and message, each beside a
@@ -236,7 +247,8 @@ test certificates (keys public, trusted by nothing but these tests).
 CI runs both on JDK 17 and 21 against `hardcharger-server` from the image named in
 `.github/workflows/ci.yml` (`ghcr.io/gizmodata/hardcharger:main`, Hardcharger's main branch;
 pin a `:sha-<short>` tag to reproduce a run; pulled with the workflow's
-`GITHUB_TOKEN`; the package grants this repository read access). While the repositories are
+`GITHUB_TOKEN`; the package grants this repository read access), and `LegacyCompatibilityIT`
+against a container of `ghcr.io/gizmodata/hardcharger:2.2.0`. While the repositories are
 internal, CI fetches the submodule (for a `-SNAPSHOT` `chargewire-jdbc.version`, which must match
 the submodule's version) with `CHARGEWIRE_JDBC_DEPLOY_KEY`, a read-only deploy key of
 `gizmodata/chargewire-jdbc`. For a released version it checks Maven Central has it and uses that. No

@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The protocol Hardcharger speaks is now called Chargewire, and this driver is built on the
+  Chargewire JDBC driver (`com.gizmodata:chargewire-jdbc`, package `com.gizmodata.chargewire.jdbc`).
+  `jdbc:hardcharger://` URLs, their options and `HardchargerDriver` are unchanged, and connection
+  URLs written for earlier versions keep working. Code that reaches the underlying driver uses its
+  new class names: `unwrap(ChargewireConnection.class)`, `ChargewireProblem.codeOf(error)`, and
+  `com.gizmodata.chargewire.jdbc.ChargewireDriver`, which the standalone jar registers for
+  `jdbc:chargewire://` URLs. The standalone jar's relocated dependencies moved to
+  `com.gizmodata.chargewire.jdbc.shaded`.
+- The driver still works with Hardcharger servers released before the rename (2.2.0 and earlier):
+  at the default `basePath` it falls back to such a server's spelling of the protocol.
+- CI reads the submodule with the `CHARGEWIRE_JDBC_DEPLOY_KEY` secret.
+
+### Added
+
+- `LegacyCompatibilityIT`: connections to a server from before the rename
+  (`HARDCHARGER_JDBC_TEST_LEGACY_SERVER`, `HARDCHARGER_JDBC_TEST_LEGACY_SERVER_PASSWORD`; CI runs
+  `ghcr.io/gizmodata/hardcharger:2.2.0` for it), queries, prepared statements, a batch insert and
+  index metadata on it, and the earlier URL forms against a current server. It fails, never skips,
+  without that server, and fails when the configured server is a current one.
+
 ## [2.0.1] - 2026-10-21
 
 ### Fixed
@@ -110,7 +132,8 @@ moved since them.
   once by default (`resultPartitions` 8, was 1). PartitionsIT checks the default, its twin
   (`resultPartitions=1`), and that a 2-million-row split result keeps every row in order.
 - CI reads the chargewire-jdbc submodule with a read-only deploy key
-  (`CHARGEWIRE_JDBC_DEPLOY_KEY`) and pulls `hardcharger-server` from the private image with `GITHUB_TOKEN`: no personal token.
+  (`CHARGEWIRE_JDBC_DEPLOY_KEY`) and pulls `hardcharger-server` from the private image with
+  `GITHUB_TOKEN`: no personal token.
 
 ### Added
 
