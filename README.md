@@ -31,8 +31,9 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.1.0**, published on Maven Central. Compatible with Hardcharger 2.3.0, and with
-servers from before the protocol's rename (2.2.0 and earlier).
+**Current release: 2.2.0**, published on Maven Central, on the Chargewire JDBC driver 2.1.0 (Chargewire
+2.1.0). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
+and earlier).
 
 ## 📦 Install
 
@@ -42,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.1.0'
+implementation 'com.gizmodata:hardcharger-jdbc:2.2.0'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -181,10 +182,15 @@ What is Hardcharger's in `DatabaseMetaData`:
 | `getURL()` | the `jdbc:hardcharger:` URL you gave, with passwords and tokens shown as `***` |
 | `getDatabaseProductName()`, `getDatabaseProductVersion()` | the server's own answer: `Hardcharger`, and its version |
 | `isReadOnly()` | the server's own answer (`server_read_only`): true for a server started with `--read-only` |
+| `getIndexInfo()` | the indexes `duckdb_indexes()` lists; a nested schema (`CREATE SCHEMA sales.payroll`) is named by its path, `sales.payroll`, as in every other metadata call, and a part containing a dot or a double quote is quoted |
 
 `connection.unwrap(com.gizmodata.chargewire.jdbc.ChargewireConnection.class)` reaches the
 Chargewire connection (for `getSessionId()`, or `getTransactionState()`: the server's view of the
-session's transaction, which sees SQL `BEGIN` too). Errors carry the server's code in
+session's transaction, which sees SQL `BEGIN` too). A lost session's statement runs again in a new
+session only when the driver knows no transaction was open; a session Hardcharger ended for a
+transaction left idle (`--idle-in-transaction-session-timeout`) fails the statement with SQLState
+`40000` and opens a new session (the Chargewire driver's
+[Lost sessions](https://github.com/gizmodata/chargewire-jdbc#readme) rules). Errors carry the server's code in
 `ChargewireProblem.codeOf(error)`, or a `client_` code for a failure the driver found in the
 server's answer (`client_http_error`, `client_protocol_error`). `Statement.getConnection()` returns
 that Chargewire connection too, not the Hardcharger one. `jdbc:chargewire://` URLs keep going to
