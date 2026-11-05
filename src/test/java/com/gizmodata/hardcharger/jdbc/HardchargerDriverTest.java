@@ -64,6 +64,23 @@ class HardchargerDriverTest {
   }
 
   @Test
+  void resumeTimeoutIsListedAndTakenFromTheUrl() throws SQLException {
+    DriverPropertyInfo byDefault =
+        Arrays.stream(driver.getPropertyInfo("jdbc:hardcharger://h", new Properties()))
+            .filter(p -> p.name.equals("resumeTimeout"))
+            .findFirst()
+            .orElseThrow();
+    assertEquals("600", byDefault.value);
+    DriverPropertyInfo set =
+        Arrays.stream(
+                driver.getPropertyInfo("jdbc:hardcharger://h?resumeTimeout=45", new Properties()))
+            .filter(p -> p.name.equals("resumeTimeout"))
+            .findFirst()
+            .orElseThrow();
+    assertEquals("45", set.value);
+  }
+
+  @Test
   void theServiceFileNamesTheDriver() throws Exception {
     try (InputStream in =
         HardchargerDriver.class.getResourceAsStream("/META-INF/services/java.sql.Driver")) {
