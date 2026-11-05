@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-05
+
+For GizmoData Cloud's auto-resume (Chargewire 2.2.0, spec §11.2), on the Chargewire JDBC driver 2.2.0.
+
+### Added
+
+- **A stopped GizmoData Cloud cluster that resumes on sign-in** (Chargewire JDBC driver 2.2.0):
+  while the cluster starts, its address answers `server_resuming` (HTTP 503 with `Retry-After`),
+  and the driver waits the `Retry-After` (3 s without one, at least 1 s, at most 60 s) and sends the
+  same request again, the sign-in included, until the new `resumeTimeout` property (seconds,
+  default `600`; `0` turns the retries off) runs out; then the error has SQLState `08001` and code
+  `server_resuming`. Every request but discovery waits at least 30 s for its answer, because a
+  resuming server may hold one for up to 25 s. `isValid(timeout)` and a statement's query timeout
+  stop the retries at their own limit, and `Statement.cancel()` ends them. The README's "A stopped
+  cluster that resumes" documents it; `ServerResumingIT` runs it through a stand-in in front of a
+  real server, with `resumeTimeout` in the URL and in the properties.
+
 ## [2.2.0] - 2026-11-04
 
 For Hardcharger 2.7.0 (Chargewire 2.1.0).

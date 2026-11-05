@@ -31,8 +31,8 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.2.0**, published on Maven Central, on the Chargewire JDBC driver 2.1.0 (Chargewire
-2.1.0). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
+**Current release: 2.3.0**, published on Maven Central, on the Chargewire JDBC driver 2.2.0 (Chargewire
+2.2.0). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
 ## 📦 Install
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.2.0</version>
+  <version>2.3.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.2.0'
+implementation 'com.gizmodata:hardcharger-jdbc:2.3.0'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -107,6 +107,28 @@ each over its own connection (`resultPartitions`, default 32; the server sizes t
 result, and `resultPartitions=1` reads one stream), in the server's row order unless
 `resultOrder=any`. Results come compressed (`ipcCompression=auto`: `lz4_frame` on a near link,
 `zstd` on a far one).
+
+### ⏳ A stopped cluster that resumes
+
+A GizmoData Cloud cluster with auto-resume stops while nobody uses it and starts again at the
+next sign-in. While it starts, its address answers `server_resuming` (HTTP 503, with
+`Retry-After`), and the driver waits and sends the same request again, the sign-in included:
+`getConnection` simply takes longer and then returns a working connection.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `resumeTimeout` | `600` | Seconds to keep retrying while the server answers `server_resuming`; `0` reports the first such answer at once |
+
+It waits the `Retry-After` (3 s without one, at least 1 s, at most 60 s) between attempts. After
+`resumeTimeout` the error reaches the application with SQLState `08001` and code `server_resuming`
+(`SQLTransientConnectionException`). A connection pool's own connection timeout may need to allow
+for a resume. Since a resuming server may hold an answer for up to 25 s, every request but
+discovery waits at least 30 s for its answer, whatever `connectTimeout` or `networkTimeout` say.
+`isValid(timeout)` and a statement's query timeout stop the retries at their own limit, and
+`Statement.cancel()` ends them. The rules in full are the Chargewire driver's
+([A server that is resuming](https://github.com/gizmodata/chargewire-jdbc#-a-server-that-is-resuming)).
+A server with no stand-in in front of it never answers `server_resuming`, so nothing changes for
+one.
 
 ### 🪪 Client certificate sign-in (mutual TLS)
 
