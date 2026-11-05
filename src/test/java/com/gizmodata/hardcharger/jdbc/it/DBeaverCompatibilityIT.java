@@ -231,6 +231,56 @@ class DBeaverCompatibilityIT {
     }
   }
 
+  /**
+   * A nested schema (DuckDB 2.0's {@code CREATE SCHEMA a.b}) is named by its path in index
+   * metadata, as in every other metadata call (Chargewire 2.1.0, spec §10), and a top-level schema
+   * whose name contains a dot is quoted, so the two stay apart.
+   */
+  @Test
+  void indexesInNestedSchemasAreNamedByTheSchemasPath() throws SQLException {
+    try (Connection connection = connect();
+        Statement statement = connection.createStatement()) {
+      statement.execute("CREATE SCHEMA nest_qa");
+      statement.execute("CREATE SCHEMA nest_qa.inner_qa");
+      statement.execute("CREATE SCHEMA \"nest_qa.inner_qa\"");
+      statement.execute("CREATE TABLE nest_qa.inner_qa.leaf_qa(id INTEGER, label VARCHAR)");
+      statement.execute("CREATE INDEX idx_nested_qa ON nest_qa.inner_qa.leaf_qa(label)");
+      statement.execute("CREATE TABLE \"nest_qa.inner_qa\".leaf_qa(id INTEGER)");
+      statement.execute("CREATE INDEX idx_dotted_qa ON \"nest_qa.inner_qa\".leaf_qa(id)");
+      DatabaseMetaData metadata = connection.getMetaData();
+      try (ResultSet tables = metadata.getTables("memory", "nest_qa.inner_qa", "leaf_qa", null)) {
+        assertTrue(tables.next(), "getTables names the schema by its path");
+      }
+      String[][] cases = {
+        {"nest_qa.inner_qa", "idx_nested_qa", "label"},
+        {"\"nest_qa.inner_qa\"", "idx_dotted_qa", "id"}
+      };
+      for (String[] expected : cases) {
+        try (ResultSet indexes =
+            metadata.getIndexInfo("memory", expected[0], "leaf_qa", false, false)) {
+          assertTrue(indexes.next(), expected[0]);
+          assertEquals(expected[0], indexes.getString("TABLE_SCHEM"));
+          assertEquals(expected[1], indexes.getString("INDEX_NAME"));
+          assertEquals(expected[2], indexes.getString("COLUMN_NAME"));
+          assertFalse(indexes.next(), expected[0]);
+        }
+      }
+      try (ResultSet indexes =
+          metadata.getIndexInfo("memory", "inner_qa", "leaf_qa", false, false)) {
+        assertFalse(indexes.next(), "the leaf name alone is not the nested schema's name");
+      }
+      try (ResultSet indexes = metadata.getIndexInfo("memory", null, "leaf_qa", false, false)) {
+        List<String> schemas = new ArrayList<>();
+        while (indexes.next()) {
+          schemas.add(indexes.getString("TABLE_SCHEM"));
+        }
+        assertEquals(
+            List.of("\"nest_qa.inner_qa\"", "nest_qa.inner_qa"),
+            schemas.stream().sorted().collect(java.util.stream.Collectors.toList()));
+      }
+    }
+  }
+
   @Test
   void indexFiltersTreatNamesLiterallyAndKeepSchemasSeparate() throws SQLException {
     try (Connection connection = connect();

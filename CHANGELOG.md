@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-04
+
+For Hardcharger 2.7.0 (Chargewire 2.1.0).
+
+### Changed
+
+- Built on the Chargewire JDBC driver 2.1.0. From it: a statement that finds its session lost runs
+  again in a new session only when the driver knows no transaction was open in the old one (with
+  autocommit on, the session's state read after the last statement; a SQL `BEGIN` shows only
+  there), and otherwise fails with SQLState `08007` without running, so it can't commit on its
+  own while the transaction's earlier statements were rolled back. A session Hardcharger ended for a
+  transaction left idle (`--idle-in-transaction-session-timeout`; `session_ended`, reason
+  `idle_in_transaction`) is replaced, and the statement fails with SQLState `40000`
+  (`SQLTransactionRollbackException`) without running; before, the connection was closed.
+
+### Fixed
+
+- `getIndexInfo()` names a nested schema (DuckDB 2.0's `CREATE SCHEMA a.b`) by its path, `a.b`, as
+  Hardcharger 2.7.0's other metadata calls do, and takes the path as its schema argument. Before, it
+  named the schema by its leaf name, and a top-level schema whose name contains a dot (`"a.b"`) by
+  its bare name, so `getIndexInfo(null, "a.b", ...)` returned the dotted schema's indexes instead of
+  the nested schema's.
+
 ## [2.1.0] - 2026-10-29
 
 ### Changed
