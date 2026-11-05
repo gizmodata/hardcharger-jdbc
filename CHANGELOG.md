@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-05
+
+On the Chargewire JDBC driver 2.2.1.
+
+### Fixed
+
+- **A statement could still run again on its own in autocommit after a SQL `BEGIN`** (Chargewire
+  JDBC driver 2.2.1). Hardcharger through 2.7.0 (Chargewire 2.2.0 and earlier) answers a statement
+  without rows before it copies the session's transaction state into the session document, so a
+  session read right after `BEGIN` (`isValid()`, `getCatalog()`, `getSchema()`,
+  `getTransactionState()`) could still say `none`; a statement that then found the session lost
+  (idle eviction, a restart) ran again in autocommit on the new session and committed on its own,
+  while the transaction's earlier statements had been rolled back. Now, after a statement whose text
+  may open a transaction or change how one opens (`BEGIN`, `START`, `EXECUTE` of a prepared
+  statement, anything naming autocommit), a session read saying `none` doesn't count
+  (`getTransactionState()` reports `UNKNOWN`) until a statement whose text may end one (`COMMIT`,
+  `ROLLBACK`, `END`, `ABORT`), a new session or a change of autocommit, and such a statement fails
+  with SQLState `08007` without running. Hardcharger releases on Chargewire 2.2.1 fix the server
+  side; the driver holds against the servers already deployed.
+
 ## [2.3.0] - 2026-11-05
 
 For GizmoData Cloud's auto-resume (Chargewire 2.2.0, spec §11.2), on the Chargewire JDBC driver 2.2.0.

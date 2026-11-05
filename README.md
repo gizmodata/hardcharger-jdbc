@@ -31,8 +31,8 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.3.0**, published on Maven Central, on the Chargewire JDBC driver 2.2.0 (Chargewire
-2.2.0). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
+**Current release: 2.3.1**, published on Maven Central, on the Chargewire JDBC driver 2.2.1 (Chargewire
+2.2.1). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
 ## 📦 Install
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.3.0</version>
+  <version>2.3.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.3.0'
+implementation 'com.gizmodata:hardcharger-jdbc:2.3.1'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -208,7 +208,9 @@ What is Hardcharger's in `DatabaseMetaData`:
 
 `connection.unwrap(com.gizmodata.chargewire.jdbc.ChargewireConnection.class)` reaches the
 Chargewire connection (for `getSessionId()`, or `getTransactionState()`: the server's view of the
-session's transaction, which sees SQL `BEGIN` too). A lost session's statement runs again in a new
+session's transaction, which sees SQL `BEGIN` too; right after a statement that may begin one, a
+`none` reads as `UNKNOWN` until one that may end it, because Hardcharger through 2.7.0 can still say
+`none` for a moment after a `BEGIN`). A lost session's statement runs again in a new
 session only when the driver knows no transaction was open; a session Hardcharger ended for a
 transaction left idle (`--idle-in-transaction-session-timeout`) fails the statement with SQLState
 `40000` and opens a new session (the Chargewire driver's
