@@ -57,6 +57,23 @@ class TlsIT {
   }
 
   @Test
+  void aHostNameWithAFinalDotConnects() throws SQLException {
+    // A fully qualified name ("localhost.", as "<cluster>.gizmodata.com." would be written):
+    // Java's TLS stack refuses it in SNI, so the Chargewire driver (2.2.3) connects to the name
+    // without the final dot, which the certificate (for localhost) then matches.
+    Properties properties = server.properties();
+    properties.setProperty("tlsRootCerts", cert("ca.pem"));
+    try (Connection connection =
+            DriverManager.getConnection(
+                "jdbc:hardcharger://localhost.:" + server.port, properties);
+        Statement statement = connection.createStatement();
+        ResultSet rows = statement.executeQuery("SELECT 'over TLS'")) {
+      assertTrue(rows.next());
+      assertEquals("over TLS", rows.getString(1));
+    }
+  }
+
+  @Test
   void explicitlyDisabledCertificateVerificationStillAuthenticatesAndReadsTables()
       throws SQLException {
     Properties properties = server.properties();

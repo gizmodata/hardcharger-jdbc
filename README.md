@@ -31,7 +31,7 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.4.0**, published on Maven Central, on the Chargewire JDBC driver 2.2.2 (Chargewire
+**Current release: 2.4.1**, published on Maven Central, on the Chargewire JDBC driver 2.2.3 (Chargewire
 2.2.1). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.4.0</version>
+  <version>2.4.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.4.0'
+implementation 'com.gizmodata:hardcharger-jdbc:2.4.1'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -86,7 +86,8 @@ jdbc:hardcharger://host[:port][/catalog][?key=value&...]
 The port defaults to 31337, except on a GizmoData Cloud host, where it defaults to 443: a host that
 is `gizmodata.com` or ends in `.gizmodata.com` (any case, a trailing dot allowed; `evilgizmodata.com`
 and `gizmodata.com.example.org` are not), so `jdbc:hardcharger://mycluster.us-east-1.aws.gizmodata.com`
-reaches the cluster at port 443. A port in the URL always wins. The Hardcharger CLI and web UI use
+reaches the cluster at port 443. A port in the URL always wins, and a name with a final dot
+(`mycluster.us-east-1.aws.gizmodata.com.`) connects as the name without it. The Hardcharger CLI and web UI use
 the same rule. TLS is on unless `useEncryption=false`, as with `jdbc:chargewire://`;
 there is no separate scheme for plain HTTP. Options can also follow semicolons or come in the
 `Properties`, and keys are case-insensitive.

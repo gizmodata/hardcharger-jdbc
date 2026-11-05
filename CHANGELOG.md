@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-11-05
+
+On the Chargewire JDBC driver 2.2.3.
+
+### Fixed
+
+- **A host name with a final dot failed every TLS connection** (Chargewire JDBC driver 2.2.3).
+  2.4.0 sends a GizmoData Cloud name written fully qualified
+  (`jdbc:hardcharger://mycluster.us-east-1.aws.gizmodata.com.`) to port 443, but Java's TLS stack
+  refuses an SNI name with a trailing dot, so the connection then failed with a raw
+  `IllegalArgumentException`. The driver now connects to the name without one final dot, and SNI
+  and the certificate check use that name. `TlsIT` connects to `localhost.` over TLS.
+
 ## [2.4.0] - 2026-11-05
 
 On the Chargewire JDBC driver 2.2.2.
