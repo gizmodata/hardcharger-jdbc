@@ -17,10 +17,11 @@ import java.util.logging.Logger;
  *
  * <p>Hardcharger speaks Chargewire, so this driver hands every connection to the Chargewire JDBC
  * driver ({@link ChargewireDriver}), with the URL rewritten to {@code jdbc:chargewire://} and the
- * port defaulting to {@value HardchargerUrl#DEFAULT_PORT}. The connection properties, TLS included,
- * are the Chargewire driver's: TLS is on unless {@code useEncryption=false}. Connections report
- * this driver's name and version in {@link java.sql.DatabaseMetaData}, and the URL the application
- * gave.
+ * port defaulting to {@value HardchargerUrl#DEFAULT_PORT}, or to {@value HardchargerUrl#CLOUD_PORT}
+ * on a GizmoData Cloud host ({@code gizmodata.com} or a name ending in {@code .gizmodata.com}). The
+ * connection properties, TLS included, are the Chargewire driver's: TLS is on unless {@code
+ * useEncryption=false}. Connections report this driver's name and version in {@link
+ * java.sql.DatabaseMetaData}, and the URL the application gave.
  *
  * <p>It registers itself with {@link DriverManager} when loaded, and through {@code
  * META-INF/services/java.sql.Driver}. It does not accept {@code jdbc:chargewire:} URLs; the

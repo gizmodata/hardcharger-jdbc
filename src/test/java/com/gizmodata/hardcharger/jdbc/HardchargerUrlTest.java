@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.sql.SQLException;
 import java.sql.SQLNonTransientConnectionException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class HardchargerUrlTest {
   @Test
@@ -24,6 +26,58 @@ class HardchargerUrlTest {
         HardchargerUrl.toChargewire("jdbc:hardcharger://db.example;user=joe"));
     assertEquals(
         "jdbc:chargewire://[::1]:31337", HardchargerUrl.toChargewire("jdbc:hardcharger://[::1]"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "gizmodata.com",
+        "GizmoData.COM",
+        "gizmodata.com.",
+        "mycluster.us-east-1.aws.gizmodata.com",
+        "MyCluster.US-East-1.AWS.GizmoData.Com",
+        "mycluster.us-east-1.aws.vaden.gizmodata.com."
+      })
+  void aGizmoDataCloudHostWithoutAPortGets443(String host) throws SQLException {
+    // GizmoData Cloud clusters answer at <host>:443, behind the cloud's load balancers.
+    assertEquals(
+        "jdbc:chargewire://" + host + ":443",
+        HardchargerUrl.toChargewire("jdbc:hardcharger://" + host));
+    assertEquals(
+        "jdbc:chargewire://" + host + ":443/lake?user=joe",
+        HardchargerUrl.toChargewire("jdbc:hardcharger://" + host + "/lake?user=joe"));
+    assertEquals(
+        "jdbc:chargewire://" + host + ":443;user=joe",
+        HardchargerUrl.toChargewire("jdbc:hardcharger://" + host + ";user=joe"));
+  }
+
+  @Test
+  void anExplicitPortWinsOnAGizmoDataCloudHost() throws SQLException {
+    assertEquals(
+        "jdbc:chargewire://mycluster.us-east-1.aws.gizmodata.com:31337",
+        HardchargerUrl.toChargewire(
+            "jdbc:hardcharger://mycluster.us-east-1.aws.gizmodata.com:31337"));
+    assertEquals(
+        "jdbc:chargewire://gizmodata.com:8443/x",
+        HardchargerUrl.toChargewire("jdbc:hardcharger://gizmodata.com:8443/x"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "evilgizmodata.com",
+        "gizmodata.com.example.org",
+        "gizmodata.co",
+        "gizmodata.com..",
+        "my.gizmodata.community",
+        "gizmodata",
+        "notgizmodata.com.",
+        "[::1]"
+      })
+  void lookAlikesOfAGizmoDataCloudHostKeepHardchargersPort(String host) throws SQLException {
+    assertEquals(
+        "jdbc:chargewire://" + host + ":31337",
+        HardchargerUrl.toChargewire("jdbc:hardcharger://" + host));
   }
 
   @Test

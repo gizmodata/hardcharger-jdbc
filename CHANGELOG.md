@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-05
+
+On the Chargewire JDBC driver 2.2.2.
+
+### Added
+
+- **A GizmoData Cloud host without a port goes to port 443.** A `jdbc:hardcharger://` URL whose
+  host is `gizmodata.com` or ends in `.gizmodata.com` (any case, one trailing dot allowed) and
+  names no port now connects to 443, where GizmoData Cloud clusters answer, instead of 31337. The
+  match is on the domain boundary: `evilgizmodata.com` and `gizmodata.com.example.org` keep
+  31337, as does every other host, and a port in the URL always wins. The Hardcharger CLI and web
+  UI follow the same rule from Hardcharger 2.8.0.
+
+### Fixed
+
+- **A lost session's statement ran again on the new session after the old one had run `USE`,
+  `SET`, `RESET` or `PRAGMA`** (Chargewire JDBC driver 2.2.2), so it could run in another catalog
+  or schema, or under other settings. It now fails with SQLState `08007` without running, and the
+  message says the old session's settings or `USE` are gone: after `SET`, `RESET` or `PRAGMA`
+  always (the driver does not restore settings), and after `USE` until the driver has read the
+  session after a later statement (then the new session opens in the catalog and schema it read,
+  and the statement runs again). Only a statement's first word counts (`UPDATE … SET` does not).
+
 ## [2.3.1] - 2026-11-05
 
 On the Chargewire JDBC driver 2.2.1.

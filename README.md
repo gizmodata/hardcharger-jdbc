@@ -26,12 +26,12 @@
 The JDBC driver for [Hardcharger™](https://github.com/gizmodata/hardcharger), GizmoData™'s DuckDB 2.0
 server. Hardcharger speaks [Chargewire](https://github.com/gizmodata/chargewire), so this driver is
 a thin layer on the [Chargewire JDBC driver](https://github.com/gizmodata/chargewire-jdbc): it
-accepts `jdbc:hardcharger://` URLs, uses Hardcharger's port (31337) when the URL names none, and names
+accepts `jdbc:hardcharger://` URLs, uses Hardcharger's port (31337, or 443 on a GizmoData Cloud host) when the URL names none, and names
 itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, from TLS to result
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.3.1**, published on Maven Central, on the Chargewire JDBC driver 2.2.1 (Chargewire
+**Current release: 2.4.0**, published on Maven Central, on the Chargewire JDBC driver 2.2.2 (Chargewire
 2.2.1). Compatible with Hardcharger 2.7.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.3.1</version>
+  <version>2.4.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.3.1'
+implementation 'com.gizmodata:hardcharger-jdbc:2.4.0'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -83,7 +83,11 @@ Two jars come out:
 jdbc:hardcharger://host[:port][/catalog][?key=value&...]
 ```
 
-The port defaults to 31337. TLS is on unless `useEncryption=false`, as with `jdbc:chargewire://`;
+The port defaults to 31337, except on a GizmoData Cloud host, where it defaults to 443: a host that
+is `gizmodata.com` or ends in `.gizmodata.com` (any case, a trailing dot allowed; `evilgizmodata.com`
+and `gizmodata.com.example.org` are not), so `jdbc:hardcharger://mycluster.us-east-1.aws.gizmodata.com`
+reaches the cluster at port 443. A port in the URL always wins. The Hardcharger CLI and web UI use
+the same rule. TLS is on unless `useEncryption=false`, as with `jdbc:chargewire://`;
 there is no separate scheme for plain HTTP. Options can also follow semicolons or come in the
 `Properties`, and keys are case-insensitive.
 
@@ -211,7 +215,8 @@ Chargewire connection (for `getSessionId()`, or `getTransactionState()`: the ser
 session's transaction, which sees SQL `BEGIN` too; right after a statement that may begin one, a
 `none` reads as `UNKNOWN` until one that may end it, because Hardcharger through 2.7.0 can still say
 `none` for a moment after a `BEGIN`). A lost session's statement runs again in a new
-session only when the driver knows no transaction was open; a session Hardcharger ended for a
+session only when the driver knows no transaction was open, and not after the old session ran
+`USE`, `SET`, `RESET` or `PRAGMA` whose effect the new session would lack; a session Hardcharger ended for a
 transaction left idle (`--idle-in-transaction-session-timeout`) fails the statement with SQLState
 `40000` and opens a new session (the Chargewire driver's
 [Lost sessions](https://github.com/gizmodata/chargewire-jdbc#readme) rules). Errors carry the server's code in
@@ -231,7 +236,8 @@ the Chargewire driver, which the standalone jar also registers.
    [release](https://github.com/gizmodata/hardcharger-jdbc/releases/latest) or `target/`). **Find
    Class** should show `com.gizmodata.hardcharger.jdbc.HardchargerDriver`. Click **OK**.
 4. **Database > New Database Connection**, choose **Hardcharger**, and enter the host, the port
-   (31337 unless you changed it), and the user and password.
+   (31337 unless you changed it; 443 for a GizmoData Cloud cluster, since DBeaver always puts a port
+   in the URL), and the user and password.
 5. On **Driver properties**: for a server without TLS (a local one, or the Docker quick start)
    set `useEncryption` to `false`. For a server with a private CA, set `tlsRootCerts` to its PEM
    file instead.

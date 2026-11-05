@@ -2,6 +2,7 @@ package com.gizmodata.hardcharger.jdbc;
 
 import java.sql.SQLException;
 import java.sql.SQLNonTransientConnectionException;
+import java.util.Locale;
 
 /**
  * A {@code jdbc:hardcharger://host[:port][/catalog][?key=value&...][;key=value;...]} URL, and the
@@ -10,7 +11,9 @@ import java.sql.SQLNonTransientConnectionException;
  * <p>Everything but the scheme and the port is the Chargewire driver's URL syntax, passed on as it
  * is: the same options, the same TLS default ({@code useEncryption=false} for plain HTTP). The port
  * defaults to {@value #DEFAULT_PORT}, Hardcharger's, where a {@code jdbc:chargewire://} URL without
- * one means 443 or 80.
+ * one means 443 or 80; on a GizmoData Cloud host ({@code gizmodata.com} or a name ending in {@code
+ * .gizmodata.com}, see {@link #isGizmoDataCloud(String)}) it defaults to {@value #CLOUD_PORT},
+ * where GizmoData Cloud clusters answer. A port in the URL always wins.
  */
 final class HardchargerUrl {
   /** The URL prefix this driver accepts (case-insensitive). */
@@ -18,6 +21,12 @@ final class HardchargerUrl {
 
   /** Hardcharger's Chargewire port, used when the URL names none. */
   static final int DEFAULT_PORT = 31337;
+
+  /** The port of a GizmoData Cloud host, used when the URL names none. */
+  static final int CLOUD_PORT = 443;
+
+  /** GizmoData Cloud's domain: a host is the domain itself or a name below it. */
+  private static final String CLOUD_DOMAIN = "gizmodata.com";
 
   private static final String CHARGEWIRE_PREFIX = "jdbc:chargewire:";
 
@@ -79,7 +88,7 @@ final class HardchargerUrl {
       throw invalid(url, "it has no host");
     }
     if (port.isEmpty()) {
-      port = Integer.toString(DEFAULT_PORT);
+      port = Integer.toString(isGizmoDataCloud(host) ? CLOUD_PORT : DEFAULT_PORT);
     } else if (!port.chars().allMatch(Character::isDigit)
         || port.length() > 5
         || Integer.parseInt(port) < 1
@@ -87,6 +96,23 @@ final class HardchargerUrl {
       throw invalid(url, "the port must be a number from 1 to 65535, not '" + port + "'");
     }
     return CHARGEWIRE_PREFIX + "//" + host + ":" + port + tail;
+  }
+
+  /**
+   * Whether a host is GizmoData Cloud's: {@code gizmodata.com}, or a name ending in {@code
+   * .gizmodata.com}, in any case, with one trailing dot allowed (a fully qualified name). The match
+   * is on a label boundary, so {@code evilgizmodata.com} and {@code gizmodata.com.example.org} are
+   * not; an IP address never is.
+   *
+   * @param host the URL's host, as written
+   * @return whether the port defaults to {@value #CLOUD_PORT}
+   */
+  static boolean isGizmoDataCloud(String host) {
+    String name = host.toLowerCase(Locale.ROOT);
+    if (name.endsWith(".")) {
+      name = name.substring(0, name.length() - 1);
+    }
+    return name.equals(CLOUD_DOMAIN) || name.endsWith("." + CLOUD_DOMAIN);
   }
 
   /** Hides password and token values, so a URL can appear in messages and logs. */
