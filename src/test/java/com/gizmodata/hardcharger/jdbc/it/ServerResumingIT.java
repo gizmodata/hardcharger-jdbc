@@ -151,6 +151,34 @@ class ServerResumingIT {
     }
   }
 
+  @Test
+  void afterAStopANewConnectionSignsInAgainAndAnOldOneIsRefused() throws Exception {
+    try (Connection old = DriverManager.getConnection(standIn.url(""), server.properties());
+        Statement before = old.createStatement()) {
+      try (ResultSet rows = before.executeQuery("SELECT 1")) {
+        assertTrue(rows.next());
+      }
+      // A person stops the cluster: every token issued so far is revoked, and discovery says so.
+      standIn.revokeTokensSeen();
+      standIn.reportStopped(true);
+      int signIns = standIn.seen(TOKEN).size();
+      try (Connection fresh = DriverManager.getConnection(standIn.url(""), server.properties());
+          Statement after = fresh.createStatement();
+          ResultSet rows = after.executeQuery("SELECT 'new' AS connection")) {
+        // The new connection signed in itself at its first statement: no token carried over.
+        assertTrue(rows.next());
+        assertEquals("new", rows.getString(1));
+      }
+      assertEquals(signIns + 1, standIn.seen(TOKEN).size(), "the new connection signed in");
+      SQLException refused =
+          assertThrows(SQLException.class, () -> before.executeQuery("SELECT 1"));
+      assertEquals("token_revoked", ChargewireProblem.of(refused).reason());
+      assertTrue(
+          refused.getMessage().contains(ResumingStandIn.STOPPED_DETAIL), refused.getMessage());
+      assertEquals(signIns + 1, standIn.seen(TOKEN).size(), "the old one did not sign in again");
+    }
+  }
+
   private static void assertResuming(SQLException error) {
     assertInstanceOf(SQLTransientConnectionException.class, error);
     assertEquals("08001", error.getSQLState());
