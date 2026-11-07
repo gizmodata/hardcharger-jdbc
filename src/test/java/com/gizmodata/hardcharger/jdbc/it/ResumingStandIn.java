@@ -49,6 +49,12 @@ final class ResumingStandIn implements AutoCloseable {
   private volatile String retryAfter = "1";
   private volatile Duration hold = Duration.ZERO;
   private volatile boolean stopped;
+  private final Set<String> bearersSeen = java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private final Set<String> revoked = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** GizmoData Cloud's text for a token issued before a person stopped the cluster. */
+  static final String STOPPED_DETAIL =
+      "The cluster was stopped in GizmoData Cloud after this session signed in.";
 
   /**
    * Starts a stand-in on a free loopback port.
@@ -93,6 +99,14 @@ final class ResumingStandIn implements AutoCloseable {
     this.stopped = stopped;
   }
 
+  /**
+   * Refuses every bearer token seen so far with {@code 401 invalid_token}, reason {@code
+   * token_revoked}, as GizmoData Cloud does after a person stops the cluster.
+   */
+  void revokeTokensSeen() {
+    revoked.addAll(bearersSeen);
+  }
+
   /** Every request seen so far, as {@code METHOD path}, in order. */
   List<String> lines() {
     return seen.stream().map(s -> s.method() + " " + s.path()).toList();
@@ -120,6 +134,15 @@ final class ResumingStandIn implements AutoCloseable {
       String path = exchange.getRequestURI().getRawPath();
       String query = exchange.getRequestURI().getRawQuery();
       String method = exchange.getRequestMethod();
+      String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+      if (authorization != null) {
+        if (revoked.contains(authorization)) {
+          seen.add(new Seen(method, path, new String(body, StandardCharsets.UTF_8), false));
+          answerRevoked(exchange);
+          return;
+        }
+        bearersSeen.add(authorization);
+      }
       boolean resuming = takeResuming(method + " " + path);
       seen.add(new Seen(method, path, new String(body, StandardCharsets.UTF_8), resuming));
       if (resuming) {
@@ -133,6 +156,21 @@ final class ResumingStandIn implements AutoCloseable {
       forward(exchange, method, path + (query == null ? "" : "?" + query), body);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  private void answerRevoked(HttpExchange exchange) throws IOException {
+    byte[] problem =
+        ("{\"type\":\"urn:chargewire:error:invalid_token\",\"title\":\"Invalid token\","
+                + "\"status\":401,\"code\":\"invalid_token\",\"reason\":\"token_revoked\","
+                + "\"detail\":\""
+                + STOPPED_DETAIL
+                + "\"}")
+            .getBytes(StandardCharsets.UTF_8);
+    exchange.getResponseHeaders().set("Content-Type", "application/problem+json");
+    exchange.sendResponseHeaders(401, problem.length);
+    try (OutputStream out = exchange.getResponseBody()) {
+      out.write(problem);
     }
   }
 
