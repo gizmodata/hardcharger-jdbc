@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-11-06
+
+On the Chargewire JDBC driver 2.2.4.
+
+### Fixed
+
+- **Closing a connection could start a stopped GizmoData Cloud cluster** (Chargewire JDBC driver
+  2.2.4). The driver renews its access token with the saved credentials shortly before it
+  expires, on whatever request comes next, and that included closes and cancels. A sign-in is
+  indistinguishable from a new connection, so an application that closed a connection in the
+  last minutes of its token's life started a cluster stopped with auto-resume, for nobody. Closes
+  and cancels now go with the token the driver holds and never sign in, and a close refused with
+  `invalid_token` is done (the session went with its token). Statements and metadata renew as
+  before.
+
 ## [2.4.1] - 2026-11-05
 
 On the Chargewire JDBC driver 2.2.3.
