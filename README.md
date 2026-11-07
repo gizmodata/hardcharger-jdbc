@@ -31,7 +31,7 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.4.3**, published on Maven Central, on the Chargewire JDBC driver 2.2.5 (Chargewire
+**Current release: 2.4.4**, published on Maven Central, on the Chargewire JDBC driver 2.2.6 (Chargewire
 2.2.1). Compatible with Hardcharger 2.9.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.4.3</version>
+  <version>2.4.4</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.4.3'
+implementation 'com.gizmodata:hardcharger-jdbc:2.4.4'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -140,9 +140,15 @@ Closing a connection or a statement, cancelling, and a pool's check of an idle c
 open a session, so they don't start a stopped cluster. `isValid()` returns `true` for a session the
 stopped cluster no longer has when the next statement can run on a new session, and that statement
 starts the cluster. It returns `false` when a transaction may have been lost, or when the token was
-revoked, as GizmoData Cloud does with the tokens issued before someone stops a cluster. A pool
-replaces a connection that fails its check, and the replacement's sign-in starts the cluster; with
-HikariCP's `minimumIdle` at 0 a pool doesn't open replacements on its own.
+revoked, as GizmoData Cloud does with the tokens issued before someone stops a cluster.
+
+A connection to a stopped cluster is made without signing in: GizmoData Cloud says the cluster is
+stopped in the discovery document (`"state": "stopped"`), so `getConnection` reads that and nothing
+more. The first call that does work (a statement, a prepare, or `DatabaseMetaData` asking the
+server) signs in, which starts the cluster, and waits while it resumes. Until then `isValid()` is
+`true` and closing sends nothing, and `setAutoCommit`, `setCatalog` and `setSchema` are sent with the
+session. So a pool's connections, its refills (HikariCP replaces each connection at `maxLifetime`)
+and its checks never start a stopped cluster. A wrong password fails at that first call.
 
 ### 🪪 Client certificate sign-in (mutual TLS)
 

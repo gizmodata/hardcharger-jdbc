@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.4] - 2026-11-07
+
+On the Chargewire JDBC driver 2.2.6.
+
+### Fixed
+
+- **A connection pool's new connections started a stopped GizmoData Cloud cluster** (Chargewire
+  JDBC driver 2.2.6). Every new connection signed in at connect, and a pool opens connections on
+  its own: its minimum of idle connections, and a replacement for each at its maximum lifetime
+  (HikariCP: every 30 minutes by default). So a pooled application started a cluster stopped for
+  idleness about every 30 minutes, and refilled right after someone clicked Stop. When the cluster
+  is stopped (discovery says `"state": "stopped"`), `getConnection` now connects without signing in
+  or opening a session. The first call that does work signs in, which starts the cluster, and waits
+  while it resumes. Until then `isValid()` is `true` and `close()` sends nothing. A wrong password
+  fails at that first call.
+
 ## [2.4.3] - 2026-11-07
 
 On the Chargewire JDBC driver 2.2.5.
