@@ -48,6 +48,7 @@ final class ResumingStandIn implements AutoCloseable {
   private volatile int left;
   private volatile String retryAfter = "1";
   private volatile Duration hold = Duration.ZERO;
+  private volatile boolean stopped;
 
   /**
    * Starts a stand-in on a free loopback port.
@@ -84,6 +85,19 @@ final class ResumingStandIn implements AutoCloseable {
     this.armed = Pattern.compile(pattern);
   }
 
+  /**
+   * Says the server is stopped in the discovery document ({@code "state": "stopped"}), as GizmoData
+   * Cloud's resume holder does for a stopped cluster.
+   */
+  void reportStopped(boolean stopped) {
+    this.stopped = stopped;
+  }
+
+  /** Every request seen so far, as {@code METHOD path}, in order. */
+  List<String> lines() {
+    return seen.stream().map(s -> s.method() + " " + s.path()).toList();
+  }
+
   /** The requests seen so far whose {@code METHOD path} matches {@code pattern}. */
   List<Seen> seen(String pattern) {
     Pattern p = Pattern.compile(pattern);
@@ -112,9 +126,31 @@ final class ResumingStandIn implements AutoCloseable {
         answerResuming(exchange);
         return;
       }
+      if (stopped && method.equals("GET") && path.equals("/chargewire")) {
+        answerStoppedDiscovery(exchange);
+        return;
+      }
       forward(exchange, method, path + (query == null ? "" : "?" + query), body);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  /** The server's own discovery document, with {@code "state": "stopped"} added. */
+  private void answerStoppedDiscovery(HttpExchange exchange)
+      throws IOException, InterruptedException {
+    HttpResponse<String> response =
+        client.send(
+            HttpRequest.newBuilder(URI.create(target + "/chargewire")).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+    String document = response.body().strip();
+    byte[] stopped =
+        (document.substring(0, document.lastIndexOf('}')) + ",\"state\":\"stopped\"}")
+            .getBytes(StandardCharsets.UTF_8);
+    exchange.getResponseHeaders().set("Content-Type", "application/json");
+    exchange.sendResponseHeaders(response.statusCode(), stopped.length);
+    try (OutputStream out = exchange.getResponseBody()) {
+      out.write(stopped);
     }
   }
 

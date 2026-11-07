@@ -93,6 +93,64 @@ class ServerResumingIT {
     assertEquals(1, standIn.seen(TOKEN).size(), "resumeTimeout=0: no second sign-in");
   }
 
+  @Test
+  void aStoppedClusterIsConnectedWithoutSigningInAndTheFirstStatementSetsUpTheSession()
+      throws Exception {
+    standIn.reportStopped(true);
+    standIn.resume(TOKEN, 2, "1", Duration.ZERO);
+    Properties properties = server.properties();
+    // The connection's setup: the session opens in this schema.
+    properties.setProperty("schema", "main");
+    try (Connection connection = DriverManager.getConnection(standIn.url(""), properties)) {
+      // A sign-in or a session would start the cluster, and a pool opens connections nobody uses.
+      assertEquals(List.of("GET /chargewire"), standIn.lines(), "connect read discovery only");
+      assertTrue(connection.isValid(5));
+      assertEquals(List.of("GET /chargewire"), standIn.lines(), "the check sent nothing");
+      try (Statement statement = connection.createStatement();
+          ResultSet rows = statement.executeQuery("SELECT current_schema()")) {
+        assertTrue(rows.next());
+        assertEquals("main", rows.getString(1), "the session was set up first");
+      }
+    }
+    List<String> lines = standIn.lines();
+    int firstToken = lines.indexOf(TOKEN);
+    int session = lines.indexOf("POST /chargewire/v1/sessions");
+    int statement = -1;
+    for (int i = 0; i < lines.size(); i++) {
+      if (lines.get(i).matches("POST /chargewire/v1/sessions/[^/]+/statements")) {
+        statement = i;
+        break;
+      }
+    }
+    assertEquals(1, firstToken, "the first statement signed in first: " + lines);
+    assertEquals(3, standIn.seen(TOKEN).size(), "through the resume: " + lines);
+    assertTrue(session > firstToken + 2, "then opened the session: " + lines);
+    assertTrue(standIn.seen("POST /chargewire/v1/sessions").get(0).body().contains("\"main\""));
+    assertTrue(statement > session, "then ran the statement: " + lines);
+  }
+
+  @Test
+  void aStoppedClustersRefusedSetupFailsAtTheFirstStatementAsAtConnect() throws Exception {
+    Properties properties = server.properties();
+    properties.setProperty("schema", "no_such_schema_here");
+    SQLException atConnect =
+        assertThrows(
+            SQLException.class, () -> DriverManager.getConnection(standIn.url(""), properties));
+    standIn.reportStopped(true);
+    int before = standIn.lines().size();
+    try (Connection connection = DriverManager.getConnection(standIn.url(""), properties);
+        Statement statement = connection.createStatement()) {
+      assertEquals(
+          List.of("GET /chargewire"),
+          standIn.lines().subList(before, standIn.lines().size()),
+          "connect read discovery only");
+      SQLException atFirstStatement =
+          assertThrows(SQLException.class, () -> statement.executeQuery("SELECT 1"));
+      assertEquals(atConnect.getSQLState(), atFirstStatement.getSQLState());
+      assertEquals(ChargewireProblem.codeOf(atConnect), ChargewireProblem.codeOf(atFirstStatement));
+    }
+  }
+
   private static void assertResuming(SQLException error) {
     assertInstanceOf(SQLTransientConnectionException.class, error);
     assertEquals("08001", error.getSQLState());
