@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.3] - 2026-11-07
+
+On the Chargewire JDBC driver 2.2.5.
+
+### Fixed
+
+- **A connection pool's check of an idle connection could start a stopped GizmoData Cloud
+  cluster** (Chargewire JDBC driver 2.2.5). `isValid()`, which pools call on idle connections
+  (HikariCP's `keepaliveTime`, DBeaver's keep-alive), signed in again when the token was due for
+  renewal, and opened a new session when the cluster no longer had one. Either started a cluster
+  stopped with auto-resume, for nobody. It now never signs in or opens a session. For a lost
+  session it returns `true` when the next statement can run on a new session (that statement then
+  starts the cluster), and `false` when a transaction may have been lost or the token was
+  revoked (GizmoData Cloud revokes the tokens issued before someone stops a cluster). A pool that
+  keeps a minimum of idle connections (HikariCP's `minimumIdle`) still opens replacements for
+  connections that fail the check, and opening one starts the cluster.
+
 ## [2.4.2] - 2026-11-06
 
 On the Chargewire JDBC driver 2.2.4.
