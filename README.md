@@ -31,7 +31,7 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.4.2**, published on Maven Central, on the Chargewire JDBC driver 2.2.4 (Chargewire
+**Current release: 2.4.3**, published on Maven Central, on the Chargewire JDBC driver 2.2.5 (Chargewire
 2.2.1). Compatible with Hardcharger 2.9.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.4.2</version>
+  <version>2.4.3</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.4.2'
+implementation 'com.gizmodata:hardcharger-jdbc:2.4.3'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -134,6 +134,15 @@ discovery waits at least 30 s for its answer, whatever `connectTimeout` or `netw
 ([A server that is resuming](https://github.com/gizmodata/chargewire-jdbc#-a-server-that-is-resuming)).
 A server with no stand-in in front of it never answers `server_resuming`, so nothing changes for
 one.
+
+Closing a connection or a statement, cancelling, and a pool's check of an idle connection
+(`isValid()`, which HikariCP's `keepaliveTime` and DBeaver's keep-alive call) never sign in and never
+open a session, so they don't start a stopped cluster. `isValid()` returns `true` for a session the
+stopped cluster no longer has when the next statement can run on a new session, and that statement
+starts the cluster. It returns `false` when a transaction may have been lost, or when the token was
+revoked, as GizmoData Cloud does with the tokens issued before someone stops a cluster. A pool
+replaces a connection that fails its check, and the replacement's sign-in starts the cluster; with
+HikariCP's `minimumIdle` at 0 a pool doesn't open replacements on its own.
 
 ### 🪪 Client certificate sign-in (mutual TLS)
 
