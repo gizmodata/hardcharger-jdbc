@@ -122,11 +122,10 @@ class HardchargerUrlTest {
     assertInvalid("jdbc:hardcharger:h:31337", "it must start with jdbc:hardcharger://");
     assertInvalid("jdbc:hardcharger://", "it has no host");
     assertInvalid("jdbc:hardcharger://:31337", "it has no host");
-    assertInvalid(
-        "jdbc:hardcharger://h:abc", "the port must be a number from 1 to 65535, not 'abc'");
-    assertInvalid(
-        "jdbc:hardcharger://h:70000", "the port must be a number from 1 to 65535, not '70000'");
-    assertInvalid("jdbc:hardcharger://h:0", "the port must be a number from 1 to 65535, not '0'");
+    // The port's text is not quoted: it is the start of a password in "user:pass/word@host".
+    assertInvalid("jdbc:hardcharger://h:abc", "': the port must be a number from 1 to 65535");
+    assertInvalid("jdbc:hardcharger://h:70000", "': the port must be a number from 1 to 65535");
+    assertInvalid("jdbc:hardcharger://h:0", "': the port must be a number from 1 to 65535");
     assertInvalid("jdbc:hardcharger://[::1", "an IPv6 address must end with ']'");
     assertInvalid(
         "jdbc:hardcharger://joe:secret@h",
@@ -139,6 +138,17 @@ class HardchargerUrlTest {
         assertThrows(
             SQLException.class,
             () -> HardchargerUrl.toChargewire("jdbc:hardcharger://h:x?password=hunter2"));
+    assertFalse(error.getMessage().contains("hunter2"), error.getMessage());
+    // A host and port that is not host:digits may be the start of "user:pass/word@host": the
+    // whole address and what follows it are hidden.
+    assertEquals(
+        "Invalid Hardcharger URL 'jdbc:hardcharger://***': the port must be a number from 1 to"
+            + " 65535",
+        error.getMessage());
+    error =
+        assertThrows(
+            SQLException.class,
+            () -> HardchargerUrl.toChargewire("jdbc:hardcharger://h:0?password=hunter2"));
     assertFalse(error.getMessage().contains("hunter2"), error.getMessage());
     assertTrue(error.getMessage().contains("password=***"), error.getMessage());
   }
@@ -154,7 +164,7 @@ class HardchargerUrlTest {
   @Test
   void redactHidesTheValuesOfUnknownKeys() {
     assertEquals(
-        "jdbc:hardcharger://h:1/lake?pasword=***&useEncryption=false;sslmode=***;user=joe",
+        "jdbc:hardcharger://h:1/lake?pasword=***&useEncryption=false;***;user=joe",
         HardchargerUrl.redact(
             "jdbc:hardcharger://h:1/lake?pasword=s3cr3t&useEncryption=false;sslmode=x;user=joe"));
     assertEquals(
@@ -170,11 +180,11 @@ class HardchargerUrlTest {
         new SQLNonTransientConnectionException(
             "Invalid Chargewire URL '"
                 + HardchargerUrl.redact(chargewire)
-                + "': option 'bad' is not key=value",
+                + "': an option is not key=value",
             "08001");
     SQLException restated = HardchargerUrl.restate(original, url, chargewire);
     assertEquals(
-        "Invalid Hardcharger URL 'jdbc:hardcharger://h?bad&password=***': option 'bad' is not"
+        "Invalid Hardcharger URL 'jdbc:hardcharger://h?***&password=***': an option is not"
             + " key=value",
         restated.getMessage());
     assertEquals("08001", restated.getSQLState());

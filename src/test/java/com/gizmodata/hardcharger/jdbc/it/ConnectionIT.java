@@ -179,15 +179,57 @@ class ConnectionIT {
   }
 
   @Test
+  void aRefusedSignInShowsNeitherThePasswordNorTheToken() {
+    String secret = "Zq7Kv@Xw9Jp";
+    for (String option : new String[] {"password", "token"}) {
+      for (boolean inUrl : new boolean[] {true, false}) {
+        Properties properties = server.properties();
+        properties.remove("password");
+        if (!inUrl) {
+          properties.setProperty(option, secret);
+        }
+        String url = server.url(inUrl ? option + "=" + secret : "");
+        SQLException error =
+            assertThrows(SQLException.class, () -> DriverManager.getConnection(url, properties));
+        assertEquals("28000", error.getSQLState(), error.getMessage());
+        StringBuilder messages = new StringBuilder();
+        for (Throwable each = error; each != null; each = each.getCause()) {
+          messages.append(each).append('\n');
+        }
+        assertFalse(messages.toString().contains("Zq7Kv"), messages.toString());
+        assertFalse(messages.toString().contains("Xw9Jp"), messages.toString());
+      }
+    }
+  }
+
+  @Test
   void aMalformedOptionIsReportedWithTheHardchargerUrl() {
     SQLNonTransientConnectionException error =
         assertThrows(
             SQLNonTransientConnectionException.class,
             () -> DriverManager.getConnection(server.url("bogus"), server.properties()));
     assertEquals("08001", error.getSQLState());
+    // The option is not quoted, in the URL or in the reason (chargewire-jdbc 2.3.0): after an
+    // unencoded '&' it is the rest of a value, a password's among them.
     assertEquals(
-        "Invalid Hardcharger URL '" + server.url("bogus") + "': option 'bogus' is not key=value",
+        "Invalid Hardcharger URL '"
+            + server.url("***")
+            + "': an option is not key=value; an '&' or ';' inside a value is written %26 or %3B",
         error.getMessage());
+    // Credentials before the host are refused, and not shown in the refusal.
+    SQLNonTransientConnectionException credentials =
+        assertThrows(
+            SQLNonTransientConnectionException.class,
+            () ->
+                DriverManager.getConnection(
+                    "jdbc:hardcharger://joe:Zq7KvXw9Jp@127.0.0.1:" + server.port + "/memory",
+                    server.properties()));
+    assertEquals(
+        "Invalid Hardcharger URL 'jdbc:hardcharger://***@127.0.0.1:"
+            + server.port
+            + "/memory': credentials do not belong in the URL; use the user and password"
+            + " properties",
+        credentials.getMessage());
   }
 
   /**
@@ -334,8 +376,9 @@ class ConnectionIT {
                 DriverManager.getConnection(
                     server.url("resultOrder=sideways"), server.properties()));
     assertEquals("08001", error.getSQLState());
-    assertEquals(
-        "Invalid value 'sideways' for resultOrder: expected preserve or any", error.getMessage());
+    // The value is not quoted (chargewire-jdbc 2.3.0): a value given to the wrong option may be
+    // a password.
+    assertEquals("Invalid value for resultOrder: expected preserve or any", error.getMessage());
   }
 
   @Test

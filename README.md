@@ -119,8 +119,16 @@ connection property 'tlsRootCert' in the URL: did you mean 'tlsRootCerts'?`. In 
 key fails the same way when it resembles a property or names TLS or signing in in another
 driver's words (`sslmode`, `useSSL`); any other key there is left alone, because frameworks put
 their own in (Spark's read options, Hibernate's connection settings), and is reported as a
-warning on the connection (`getWarnings()`, SQLSTATE `01S00`). Messages name keys, never values.
+warning on the connection (`getWarnings()`, SQLSTATE `01S00`).
 The [rules](https://github.com/gizmodata/chargewire-jdbc#properties) are the Chargewire driver's.
+
+**No message shows a password or a token**, or any part of one. Messages name keys, never values.
+A URL in a message, and the one `getURL()` returns, shows `***` for passwords, tokens and the value
+of every unknown key, and after the first of those only the driver's own options
+(`…?password=***&useEncryption=false&***`), because a password with an unencoded `&`, `;` or `#` in
+it continues there. Percent-encode a password in a URL (`%26` for `&`, `%3B` for `;`, `%23` for
+`#`, `%25` for `%`), or give it in the `Properties`, where it needs no encoding. Credentials before
+the host (`jdbc:hardcharger://user:password@host`) are refused, and shown as `***@`.
 
 ### 🔢 Types and time zones
 

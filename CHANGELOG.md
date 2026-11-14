@@ -36,6 +36,15 @@ of each entry below.
   in the URL now fails the connection, as does one in the `Properties` that resembles a property
   (`tlsRootCert`, `clientCert`) or names TLS or signing in (`sslmode`); any other key in the
   `Properties` still connects and is reported as a warning (README, "Connect").
+- **A password or token written in a URL could be shown in the error that refused the URL.** A
+  password with a character that must be percent-encoded gets its URL refused, and the refusal
+  quoted it: `jdbc:hardcharger://user:password@host` was shown as written in this driver's own
+  `credentials do not belong in the URL`; the start of such a password up to a `/` was quoted as
+  the port (`the port must be a number …, not '…'`); and the Chargewire driver's errors quoted
+  what followed a space, a `%`, an `&` or a `;` in it, or a value given to the wrong option. No
+  message quotes any of it now, and a URL is shown with `***` for everything that may be part of
+  a credential (README, "Connect"). This driver shows its URLs by the Chargewire driver's rule
+  (`ChargewireDriver.redact`) instead of a copy of it.
 - **Neither jar carried a licence text.** The driver-only jar now has `META-INF/LICENSE` and
   `META-INF/NOTICE`; the standalone jar has those, with the notices of the Chargewire driver and
   of everything it bundles, a listing of every component with its version and licence, and the
@@ -76,7 +85,13 @@ Everything here is something an application written for 2.4.4 can notice.
   zone); text without an offset is read by the server, so it takes every form a literal takes and
   fails with the server's error (before: ISO only, SQLSTATE `22018`); `setTime` is refused with
   `22018` (before: stored on 1970-01-01).
-- A URL shown in an error hides the value of every unknown key as well as passwords and tokens.
+- A URL shown in an error or returned by `getURL()` hides the value of every unknown key as well
+  as passwords and tokens, and after the first hidden value everything but the driver's own
+  options.
+- **The text of some errors**, so that none quotes what may be a password: `Invalid value for
+  <option>: expected …` (before: `Invalid value '<value>' for <option>: …`), `an option is not
+  key=value; …` (before: `option '<text>' is not key=value`), and `the port must be a number from
+  1 to 65535` (before: `…, not '<text>'`).
 
 ## [2.4.4] - 2026-11-07
 
