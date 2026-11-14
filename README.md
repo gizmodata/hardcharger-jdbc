@@ -31,7 +31,7 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.4.4**, published on Maven Central, on the Chargewire JDBC driver 2.2.6 (Chargewire
+**Current release: 2.5.0**, published on Maven Central, on the Chargewire JDBC driver 2.3.0 (Chargewire
 2.2.1). Compatible with Hardcharger 2.9.0, and with servers from before the protocol's rename (2.2.0
 and earlier).
 
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.4.4</version>
+  <version>2.5.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.4.4'
+implementation 'com.gizmodata:hardcharger-jdbc:2.5.0'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -112,6 +112,62 @@ each over its own connection (`resultPartitions`, default 32; the server sizes t
 result, and `resultPartitions=1` reads one stream), in the server's row order unless
 `resultOrder=any`. Results come compressed (`ipcCompression=auto`: `lz4_frame` on a near link,
 `zstd` on a far one).
+
+A key that is not one of those properties is never ignored silently, so a misspelled setting
+can't quietly not apply. In the URL it fails the connection (SQLSTATE `08001`): `Unknown
+connection property 'tlsRootCert' in the URL: did you mean 'tlsRootCerts'?`. In the `Properties` a
+key fails the same way when it resembles a property or names TLS or signing in in another
+driver's words (`sslmode`, `useSSL`); any other key there is left alone, because frameworks put
+their own in (Spark's read options, Hibernate's connection settings), and is reported as a
+warning on the connection (`getWarnings()`, SQLSTATE `01S00`).
+The [rules](https://github.com/gizmodata/chargewire-jdbc#properties) are the Chargewire driver's.
+
+**No message shows a password or a token**, or any part of one. Messages name keys, never values.
+A URL in a message, and the one `getURL()` returns, shows `***` for passwords, tokens and the value
+of every unknown key, and after the first of those only the driver's own options
+(`…?password=***&useEncryption=false&***`), because a password with an unencoded `&`, `;` or `#` in
+it continues there. Percent-encode a password in a URL (`%26` for `&`, `%3B` for `;`, `%23` for
+`#`, `%25` for `%`), or give it in the `Properties`, where it needs no encoding. Credentials before
+the host (`jdbc:hardcharger://user:password@host`) are refused, and shown as `***@`.
+
+### 🔢 Types and time zones
+
+Every Hardcharger type reads as itself, without the application choosing anything: UUID as
+`java.util.UUID`, TIME WITH TIME ZONE as `java.time.OffsetTime`, HUGEINT and UHUGEINT as
+`BigDecimal` through their whole range, BIGNUM as `BigDecimal`, BIT as its bits (`"10101"`),
+VARIANT as the Java value it holds, BOOLEAN as `Boolean`; and each takes what `getObject` returns
+for it as a parameter. The driver asks the server for its exact Arrow types as each session opens;
+`arrowLosslessConversion=false` leaves the session as the server opens it (UUID as text, TIME
+WITH TIME ZONE without its offset, HUGEINT as DECIMAL(38, 0)). The table is the Chargewire
+driver's: [DuckDB types](https://github.com/gizmodata/chargewire-jdbc#duckdb-types).
+
+A `TIMESTAMP WITH TIME ZONE` is an instant, shown in the session's `TimeZone` (never the JVM's).
+As a parameter, a value that is a point in time (`Instant`, `OffsetDateTime`, `ZonedDateTime`,
+`java.sql.Timestamp`) is stored as that instant, and a value without a zone (`LocalDateTime`,
+`LocalDate`, `java.sql.Date`, text without an offset) means what the same literal means in that
+session: `ts = ?` with a `LocalDateTime` finds the rows `ts = TIMESTAMP '…'` finds, whatever the
+JVM's default zone is. That holds where the server types the parameter (`ts = ?`, `ts IN (?, ?)`, an
+`INSERT`); in an expression it cannot type (`ts >= ? - INTERVAL 7 DAY`) a `java.sql.Timestamp` goes
+as a TIMESTAMP holding the JVM zone's wall clock: bind an `Instant` or an `OffsetDateTime` there,
+or write `CAST(? AS TIMESTAMPTZ)`. See
+[Time zones](https://github.com/gizmodata/chargewire-jdbc#time-zones).
+
+`getColumns`, a result's metadata and a parameter's give a type the same JDBC type, size and
+scale. A UNION reads its member whatever the member's type. Inside a list, a struct or a map, a
+`TIMESTAMP WITH TIME ZONE` has the text it has as a column. A parameter is the value it had when
+its setter was called, so one `Timestamp` or array can be set to each row's value in turn, and
+`executeBatch` stores what the same rows store one by one: a VARIANT keeps each row's own type (a
+batch whose rows differ in type there goes as one request per run of rows of the same type).
+
+### 🔒 Read-only connections
+
+`Connection.setReadOnly(true)` is a hint: the session still runs any statement its user may run,
+and the first call on a connection adds a warning (`getWarnings()`) that says so. To have writes
+refused, connect as a user with Hardcharger's `readonly` role, use a server started with
+`--read-only`, or run the statements between `BEGIN TRANSACTION READ ONLY` and `COMMIT`. See
+[Read-only connections](https://github.com/gizmodata/chargewire-jdbc#-read-only-connections).
+Read-only sessions that a connection can ask for are proposed in
+[gizmodata/hardcharger#45](https://github.com/gizmodata/hardcharger/issues/45).
 
 ### ⏳ A stopped cluster that resumes
 
@@ -339,6 +395,14 @@ USER_MANAGED (`-Dcentral.autoPublish=true` publishes as soon as it validates), a
 ## 📄 License
 
 [Apache License 2.0](LICENSE).
+
+Both jars carry their licences. The driver-only jar has `META-INF/LICENSE` and `META-INF/NOTICE`.
+The standalone jar also contains the Chargewire JDBC driver and what that driver bundles (Arrow,
+Jackson, Commons, FlatBuffers, SLF4J, zstd-jni), so its `META-INF/NOTICE` is this driver's notice
+followed by the Chargewire driver's and each component's, and it has the Chargewire driver's
+`META-INF/THIRD-PARTY-NOTICES.txt` (every component with its version and licence) and
+`META-INF/licenses/`. `JarLicensesIT` checks both jars, and that the listing names exactly the
+components in the standalone jar.
 
 ---
 

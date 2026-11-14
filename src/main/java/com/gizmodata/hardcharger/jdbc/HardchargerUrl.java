@@ -1,5 +1,6 @@
 package com.gizmodata.hardcharger.jdbc;
 
+import com.gizmodata.chargewire.jdbc.ChargewireDriver;
 import java.sql.SQLException;
 import java.sql.SQLNonTransientConnectionException;
 import java.util.Locale;
@@ -93,7 +94,9 @@ final class HardchargerUrl {
         || port.length() > 5
         || Integer.parseInt(port) < 1
         || Integer.parseInt(port) > 65535) {
-      throw invalid(url, "the port must be a number from 1 to 65535, not '" + port + "'");
+      // The text is not quoted: before a '/', '?', ';' or '#' in a password written before the
+      // host, it is the start of that password.
+      throw invalid(url, "the port must be a number from 1 to 65535");
     }
     return CHARGEWIRE_PREFIX + "//" + host + ":" + port + tail;
   }
@@ -115,13 +118,14 @@ final class HardchargerUrl {
     return name.equals(CLOUD_DOMAIN) || name.endsWith("." + CLOUD_DOMAIN);
   }
 
-  /** Hides password and token values, so a URL can appear in messages and logs. */
+  /**
+   * A URL as messages and {@code getURL()} show it: with {@code ***} for everything that may be
+   * part of a password or a token. The rule is the Chargewire driver's own ({@link
+   * ChargewireDriver#redact}), which reads this driver's scheme as it reads its own, so a URL is
+   * shown here exactly as that driver shows the URL made of it, which {@link #restate} relies on.
+   */
   static String redact(String url) {
-    if (url == null) {
-      return null;
-    }
-    return url.replaceAll(
-        "(?i)((?:password|token|subjecttoken|truststorepassword)=)[^&;]*", "$1***");
+    return ChargewireDriver.redact(url);
   }
 
   /**

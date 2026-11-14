@@ -6,7 +6,7 @@
 
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.4.4</version>
+  <version>2.5.0</version>
   <packaging>jar</packaging>
 
   <name>Hardcharger™ JDBC Driver</name>
@@ -58,7 +58,7 @@
          -DskipTests -DskipITs install; CI checks the two versions match); a release comes from
          Maven Central, and a release of this driver must name one (release.yml checks it is
          published). -->
-    <chargewire-jdbc.version>2.2.6</chargewire-jdbc.version>
+    <chargewire-jdbc.version>2.3.0</chargewire-jdbc.version>
     <junit.version>6.1.3</junit.version>
     <!-- Not the newest: Spotless on JDK 17, the build's JDK, allows google-java-format 1.28.0 at most. -->
     <google-java-format.version>1.28.0</google-java-format.version>
@@ -112,6 +112,17 @@
       <resource>
         <directory>src/main/resources</directory>
         <filtering>true</filtering>
+      </resource>
+      <!-- Every jar carries the licence and the notice: the driver-only jar (the one Maven
+           Central gets) these two, the standalone jar also the Chargewire driver's (below). -->
+      <resource>
+        <directory>${project.basedir}</directory>
+        <filtering>false</filtering>
+        <includes>
+          <include>LICENSE</include>
+          <include>NOTICE</include>
+        </includes>
+        <targetPath>META-INF</targetPath>
       </resource>
     </resources>
 
@@ -302,8 +313,16 @@
               <transformers>
                 <!-- Merges META-INF/services/java.sql.Driver: both drivers register. -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer"/>
+                <!-- Licences. The Chargewire driver's jar carries the licence texts of everything
+                     in it (META-INF/THIRD-PARTY-NOTICES.txt, META-INF/licenses), and they pass
+                     through as they are. Its NOTICE is appended to this driver's, so the
+                     standalone jar's NOTICE is this driver's, then the Chargewire driver's, then
+                     each component's. Both projects have the same LICENSE, the Apache License
+                     2.0: this driver's copy is kept (the filter below drops the other).
+                     JarLicensesIT checks both jars. -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/NOTICE</resource>
+                </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <manifestEntries>
                     <Automatic-Module-Name>com.gizmodata.hardcharger.jdbc</Automatic-Module-Name>
@@ -313,6 +332,12 @@
                 </transformer>
               </transformers>
               <filters>
+                <filter>
+                  <artifact>com.gizmodata:chargewire-jdbc</artifact>
+                  <excludes>
+                    <exclude>META-INF/LICENSE</exclude>
+                  </excludes>
+                </filter>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>

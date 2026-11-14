@@ -7,6 +7,124 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-13
+
+On the Chargewire JDBC driver 2.3.0, whose
+[changelog](https://github.com/gizmodata/chargewire-jdbc/blob/main/CHANGELOG.md) has the details
+of each entry below.
+
+**This release changes behaviour that an application written for 2.4.4 can depend on.** Each
+item is under "Changed" below: the exact types are on by default (`getObject` and the metadata
+change for UUID, TIME WITH TIME ZONE, HUGEINT, UHUGEINT, BIT, BIGNUM, VARIANT and JSON;
+`arrowLosslessConversion=false` keeps 2.4.4's for the first four); a URL or `Properties` with an
+unknown key can fail the connection; a parameter typed `TIMESTAMP WITH TIME ZONE` takes a value
+without a zone as the session reads the literal; a parameter is the value it had when its setter
+was called, and a batch may take more than one request; and the text of a nested `TIMESTAMP WITH
+TIME ZONE` and of some connection errors changes.
+
+### Fixed
+
+- **A value without a time zone bound to a `TIMESTAMP WITH TIME ZONE` parameter was read in the
+  JVM's default time zone instead of the session's, so filters matched the wrong rows without an
+  error.** `setObject` with a `LocalDateTime` or a `LocalDate`, `setDate`, and `setString` with
+  text that has no offset now mean what the same literal means in that session
+  (`ts = ?` finds the rows `ts = TIMESTAMP '…'` finds), whatever the JVM's zone. Points in time
+  (`Instant`, `OffsetDateTime`, `ZonedDateTime`, `java.sql.Timestamp`) are stored as that instant,
+  as before.
+- **A `TIMESTAMP WITH TIME ZONE` read in a session whose `TimeZone` is a three-letter ID (`PST`,
+  `IST`, `EST`) showed UTC's wall clock** through `LocalDateTime`, `OffsetDateTime` and
+  `getString`.
+- **`TIME WITH TIME ZONE` lost its offset, and an `OffsetTime` could not be bound.** It now reads
+  as `java.time.OffsetTime` and takes one as a parameter.
+- **BIGNUM, BIT and VARIANT arrived as bytes, and several types could not be bound.** BIGNUM reads
+  as `BigDecimal`, BIT as its bits, VARIANT as the value it holds. A parameter for an ENUM, a
+  fixed-size ARRAY, a BIGNUM or a VARIANT failed, a HUGEINT above 38 digits did not fit, and
+  `setString` for a BIT stored the text's bytes as bits; each now stores what it was given.
+- **On a connection made to a stopped GizmoData Cloud cluster, `setSchema` followed by
+  `setCatalog` opened the session in the wrong schema, or not at all** (every statement failed
+  with `SET schema: No catalog + schema named …`).
+- **A connection property the driver does not know was ignored without a word.** An unknown key
+  in the URL now fails the connection, as does one in the `Properties` that resembles a property
+  (`tlsRootCert`, `clientCert`) or names TLS or signing in (`sslmode`); any other key in the
+  `Properties` still connects and is reported as a warning (README, "Connect").
+- **A password or token written in a URL could be shown in the error that refused the URL.** A
+  password with a character that must be percent-encoded gets its URL refused, and the refusal
+  quoted it: `jdbc:hardcharger://user:password@host` was shown as written in this driver's own
+  `credentials do not belong in the URL`; the start of such a password up to a `/` was quoted as
+  the port (`the port must be a number …, not '…'`); and the Chargewire driver's errors quoted
+  what followed a space, a `%`, an `&` or a `;` in it, or a value given to the wrong option. No
+  message quotes any of it now, and a URL is shown with `***` for everything that may be part of
+  a credential (README, "Connect"). This driver shows its URLs by the Chargewire driver's rule
+  (`ChargewireDriver.redact`) instead of a copy of it.
+- **A parameter set from an object that was changed afterwards took the later value**: one
+  `java.sql.Timestamp`, `Date`, `byte[]`, array or `List` reused for every row of a batch stored
+  the last row's value in every row. A setter now takes the value as it is when it is called.
+- **`executeBatch` could store something else than the same rows stored one by one**, where the
+  type that is sent follows the value (a VARIANT, a parameter the server gives no type): rows of
+  different types were sent as one column of text. Such a batch now goes as one request per run
+  of rows of the same type.
+- **A UNION failed to read, or read as NULL, for most member types** (DECIMAL, HUGEINT,
+  TIMESTAMP WITH TIME ZONE, MAP, LIST, STRUCT, and with the exact types UUID, TIME WITH TIME ZONE
+  and BIT).
+- **`getString` of a list, struct or map holding a `TIMESTAMP WITH TIME ZONE` showed the JVM
+  zone's wall clock, without an offset.** It shows the session's, as the column does.
+- **Neither jar carried a licence text.** The driver-only jar now has `META-INF/LICENSE` and
+  `META-INF/NOTICE`; the standalone jar has those, with the notices of the Chargewire driver and
+  of everything it bundles, a listing of every component with its version and licence, and the
+  licence texts of SLF4J, zstd-jni and Zstandard. The build checks both jars.
+
+### Added
+
+- **`arrowLosslessConversion`** (default `true`): the driver asks the server for its exact Arrow
+  types as each session opens, so every Hardcharger type arrives as itself without the application
+  choosing a mode. `arrowLosslessConversion=false` leaves the session as the server opens it, as
+  2.4.4 did.
+
+### Changed
+
+Everything here is something an application written for 2.4.4 can notice.
+
+- **What `getObject` and the metadata return for some types**, for a connection that set nothing
+  (set `arrowLosslessConversion=false` to keep the "before" column for the first four):
+
+  | Type | Before (2.4.4) | Now |
+  |---|---|---|
+  | UUID | `String`, VARCHAR | `java.util.UUID`, OTHER, type name `UUID` (`getString` is unchanged) |
+  | TIME WITH TIME ZONE | `java.sql.Time` without the offset, TIME | `java.time.OffsetTime`, TIME_WITH_TIMEZONE |
+  | HUGEINT, UHUGEINT | `BigDecimal`, DECIMAL, type name `DECIMAL(38,0)`; above 38 digits an error | `BigDecimal`, NUMERIC, type name `HUGEINT` or `UHUGEINT`; every value reads |
+  | BIT | `byte[]`, VARBINARY | `String` of `0` and `1`, OTHER, type name `BIT` |
+  | BIGNUM | `byte[]`, VARBINARY | `BigDecimal`, NUMERIC, type name `BIGNUM` |
+  | VARIANT | `Map` of two byte arrays, STRUCT | the value it holds, OTHER, type name `VARIANT` |
+  | JSON | `String`, VARCHAR, type name `VARCHAR` | the same, type name `JSON` |
+
+- **Connection strings that connected before and now fail**: a URL with a key that is not a
+  connection property (it was ignored), and `Properties` with a key that resembles one or names
+  TLS or signing in.
+- **`Connection.setReadOnly(true)` adds a warning** saying that it is a hint and enforces
+  nothing (it never did). No statement is refused.
+- **Parameters typed `TIMESTAMP WITH TIME ZONE`**: `setDate` without a `Calendar` is that date at
+  midnight in the session's zone (before: the JVM's); `setObject(value, Types.TIMESTAMP)` with an
+  `Instant` or `OffsetDateTime` stores that instant (before: its wall clock read in the JVM's
+  zone); text without an offset is read by the server, so it takes every form a literal takes and
+  fails with the server's error (before: ISO only, SQLSTATE `22018`); `setTime` is refused with
+  `22018` (before: stored on 1970-01-01).
+- A URL shown in an error or returned by `getURL()` hides the value of every unknown key as well
+  as passwords and tokens, and after the first hidden value everything but the driver's own
+  options.
+- **`DatabaseMetaData.getColumns`** says the same as a result's metadata for the types above
+  (`DATA_TYPE`, `COLUMN_SIZE`, `DECIMAL_DIGITS`): NUMERIC 39 for HUGEINT and UHUGEINT (before:
+  DECIMAL 39), TIME_WITH_TIMEZONE for TIME WITH TIME ZONE (TIME), OTHER for UUID (VARCHAR), BIT
+  (VARBINARY) and VARIANT (STRUCT), NUMERIC for BIGNUM (VARBINARY).
+- **A parameter is the value it had when its setter was called**, and **a batch may take more
+  than one request** (see the fixes above). A failed batch reports the counts of the entries
+  applied before the failing request (before: none).
+- **The text of some errors**, so that none quotes what may be a password: `Invalid value for
+  <option>: expected …` (before: `Invalid value '<value>' for <option>: …`), `an option is not
+  key=value; …` (before: `option '<text>' is not key=value`), and `the port must be a number from
+  1 to 65535` (before: `…, not '<text>'`).
+- **The text of a nested `TIMESTAMP WITH TIME ZONE`** in `getString` of a list, struct or map:
+  `"2026-01-15 17:30:00+05:30"` (before: `"2026-01-15 07:00:00.0"`, the JVM zone's wall clock).
+
 ## [2.4.4] - 2026-11-07
 
 On the Chargewire JDBC driver 2.2.6.

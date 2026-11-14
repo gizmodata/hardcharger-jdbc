@@ -179,15 +179,192 @@ class ConnectionIT {
   }
 
   @Test
+  void aRefusedSignInShowsNeitherThePasswordNorTheToken() {
+    String secret = "Zq7Kv@Xw9Jp";
+    for (String option : new String[] {"password", "token"}) {
+      for (boolean inUrl : new boolean[] {true, false}) {
+        Properties properties = server.properties();
+        properties.remove("password");
+        if (!inUrl) {
+          properties.setProperty(option, secret);
+        }
+        String url = server.url(inUrl ? option + "=" + secret : "");
+        SQLException error =
+            assertThrows(SQLException.class, () -> DriverManager.getConnection(url, properties));
+        assertEquals("28000", error.getSQLState(), error.getMessage());
+        StringBuilder messages = new StringBuilder();
+        for (Throwable each = error; each != null; each = each.getCause()) {
+          messages.append(each).append('\n');
+        }
+        assertFalse(messages.toString().contains("Zq7Kv"), messages.toString());
+        assertFalse(messages.toString().contains("Xw9Jp"), messages.toString());
+      }
+    }
+  }
+
+  @Test
   void aMalformedOptionIsReportedWithTheHardchargerUrl() {
     SQLNonTransientConnectionException error =
         assertThrows(
             SQLNonTransientConnectionException.class,
             () -> DriverManager.getConnection(server.url("bogus"), server.properties()));
     assertEquals("08001", error.getSQLState());
+    // The option is not quoted, in the URL or in the reason (chargewire-jdbc 2.3.0): after an
+    // unencoded '&' it is the rest of a value, a password's among them.
     assertEquals(
-        "Invalid Hardcharger URL '" + server.url("bogus") + "': option 'bogus' is not key=value",
+        "Invalid Hardcharger URL '"
+            + server.url("***")
+            + "': an option is not key=value; an '&' or ';' inside a value is written %26 or %3B",
         error.getMessage());
+    // Credentials before the host are refused, and not shown in the refusal.
+    SQLNonTransientConnectionException credentials =
+        assertThrows(
+            SQLNonTransientConnectionException.class,
+            () ->
+                DriverManager.getConnection(
+                    "jdbc:hardcharger://joe:Zq7KvXw9Jp@127.0.0.1:" + server.port + "/memory",
+                    server.properties()));
+    assertEquals(
+        "Invalid Hardcharger URL 'jdbc:hardcharger://***@127.0.0.1:"
+            + server.port
+            + "/memory': credentials do not belong in the URL; use the user and password"
+            + " properties",
+        credentials.getMessage());
+  }
+
+  /**
+   * A key that is no connection property is never ignored silently (Chargewire driver 2.3.0):
+   * refused in the URL, and in the Properties when it resembles a property or names TLS or signing
+   * in; anything else in the Properties connects, with a warning. No message shows a value, or the
+   * {@code jdbc:chargewire://} URL this driver makes of the application's.
+   */
+  @Test
+  void anUnknownOptionIsRefusedOrReported() throws SQLException {
+    SQLNonTransientConnectionException inUrl =
+        assertThrows(
+            SQLNonTransientConnectionException.class,
+            () ->
+                DriverManager.getConnection(
+                    server.url("resultPartition=4&pasword=s3cr3t-value"), server.properties()));
+    assertEquals("08001", inUrl.getSQLState());
+    assertEquals(
+        "Unknown connection property 'resultPartition' in the URL: did you mean"
+            + " 'resultPartitions'?",
+        inUrl.getMessage());
+
+    Properties misspelled = server.properties();
+    misspelled.setProperty("tlsRootCert", "/etc/ssl/s3cr3t-value.pem");
+    SQLNonTransientConnectionException inProperties =
+        assertThrows(
+            SQLNonTransientConnectionException.class,
+            () -> DriverManager.getConnection(server.url(""), misspelled));
+    assertEquals("08001", inProperties.getSQLState());
+    assertEquals(
+        "Unknown connection property 'tlsRootCert' in the connection's Properties: did you mean"
+            + " 'tlsRootCerts'? A key that resembles one of the driver's is refused rather than"
+            + " ignored",
+        inProperties.getMessage());
+
+    Properties anotherDrivers = server.properties();
+    anotherDrivers.setProperty("sslmode", "verify-full");
+    SQLNonTransientConnectionException security =
+        assertThrows(
+            SQLNonTransientConnectionException.class,
+            () -> DriverManager.getConnection(server.url(""), anotherDrivers));
+    assertTrue(security.getMessage().contains("it names TLS or signing in"), security.getMessage());
+    for (SQLException error : new SQLException[] {inUrl, inProperties, security}) {
+      assertFalse(error.getMessage().contains("s3cr3t"), error.getMessage());
+      assertFalse(error.getMessage().contains("verify-full"), error.getMessage());
+      assertFalse(error.getMessage().contains("jdbc:chargewire"), error.getMessage());
+    }
+
+    // What a framework puts in the Properties for itself (Spark's read options, here).
+    Properties foreign = server.properties();
+    foreign.setProperty("dbtable", "t");
+    foreign.setProperty("fetchsize", "1000");
+    try (Connection connection = DriverManager.getConnection(server.url(""), foreign)) {
+      assertEquals("42", scalar(connection, "SELECT 42"));
+      java.sql.SQLWarning warning = connection.getWarnings();
+      assertNotNull(warning);
+      assertEquals("01S00", warning.getSQLState());
+      assertEquals(
+          "The connection property 'dbtable' is not one of this driver's and was ignored"
+              + " (ChargewireProperty lists them)",
+          warning.getMessage());
+      assertTrue(warning.getNextWarning().getMessage().contains("'fetchsize'"));
+    }
+    try (Connection connection = connect()) {
+      assertEquals(null, connection.getWarnings(), "the driver's own properties raise none");
+    }
+  }
+
+  /**
+   * {@code setReadOnly(true)} is a hint: the session still writes, and since the Chargewire driver
+   * 2.3.0 the connection says so in a warning, once. A read-only transaction begun in SQL is what
+   * the server enforces.
+   */
+  @Test
+  void setReadOnlyIsAHintAndSaysSo() throws SQLException {
+    try (Connection connection = connect();
+        Statement statement = connection.createStatement()) {
+      connection.setReadOnly(true);
+      assertTrue(connection.isReadOnly());
+      java.sql.SQLWarning warning = connection.getWarnings();
+      assertNotNull(warning);
+      assertEquals("01000", warning.getSQLState());
+      assertTrue(
+          warning.getMessage().startsWith("setReadOnly(true) is a hint this driver cannot enforce"),
+          warning.getMessage());
+      statement.execute("CREATE OR REPLACE TABLE read_only_hint (i INTEGER)");
+      assertEquals(1, statement.executeUpdate("INSERT INTO read_only_hint VALUES (1)"));
+      connection.setReadOnly(true);
+      assertEquals(null, connection.getWarnings().getNextWarning(), "said once");
+      statement.execute("BEGIN TRANSACTION READ ONLY");
+      SQLException refused =
+          assertThrows(
+              SQLException.class,
+              () -> statement.executeUpdate("INSERT INTO read_only_hint VALUES (2)"));
+      assertTrue(
+          refused.getMessage().contains("transaction is launched in read-only mode"),
+          refused.getMessage());
+      statement.execute("ROLLBACK");
+      assertEquals("1", scalar(connection, "SELECT count(*) FROM read_only_hint"));
+      statement.execute("DROP TABLE read_only_hint");
+    }
+  }
+
+  /**
+   * A catalog and a schema given together both land, on every connect: the schema is one of that
+   * catalog, so the catalog must be applied first, in whatever order they were written.
+   */
+  @Test
+  void aCatalogAndASchemaGivenTogetherBothLandOnEveryConnect() throws SQLException {
+    try (Connection connection = connect();
+        Statement statement = connection.createStatement()) {
+      statement.execute("ATTACH IF NOT EXISTS ':memory:' AS together");
+      statement.execute("CREATE SCHEMA IF NOT EXISTS together.reports");
+    }
+    String base = "jdbc:hardcharger://127.0.0.1:" + server.port;
+    Properties schemaFirst = server.properties();
+    schemaFirst.setProperty("schema", "reports");
+    schemaFirst.setProperty("catalog", "together");
+    Object[][] forms = {
+      {base + "/together?schema=reports", server.properties()},
+      {base + "?schema=reports&catalog=together", server.properties()},
+      {base + ";schema=reports;catalog=together", server.properties()},
+      {base, schemaFirst},
+    };
+    for (Object[] form : forms) {
+      for (int attempt = 0; attempt < 40; attempt++) {
+        try (Connection connection =
+            DriverManager.getConnection((String) form[0], (Properties) form[1])) {
+          assertEquals(
+              "together.reports",
+              scalar(connection, "SELECT current_catalog() || '.' || current_schema()"),
+              form[0] + ", connect " + attempt);
+        }
+      }
+    }
   }
 
   @Test
@@ -199,8 +376,9 @@ class ConnectionIT {
                 DriverManager.getConnection(
                     server.url("resultOrder=sideways"), server.properties()));
     assertEquals("08001", error.getSQLState());
-    assertEquals(
-        "Invalid value 'sideways' for resultOrder: expected preserve or any", error.getMessage());
+    // The value is not quoted (chargewire-jdbc 2.3.0): a value given to the wrong option may be
+    // a password.
+    assertEquals("Invalid value for resultOrder: expected preserve or any", error.getMessage());
   }
 
   @Test
