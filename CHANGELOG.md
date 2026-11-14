@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-13
+
 On the Chargewire JDBC driver 2.3.0, whose
 [changelog](https://github.com/gizmodata/chargewire-jdbc/blob/main/CHANGELOG.md) has the details
 of each entry below.
