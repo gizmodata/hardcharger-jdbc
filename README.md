@@ -31,9 +31,9 @@ itself "Hardcharger JDBC Driver" to the tools that show it. Everything else, fro
 streaming and partitioned reads, is the Chargewire driver's, which speaks the Chargewire protocol
 1.0.0.
 
-**Current release: 2.5.0**, published on Maven Central, on the Chargewire JDBC driver 2.3.0 (Chargewire
-2.2.1). Compatible with Hardcharger 2.9.0, and with servers from before the protocol's rename (2.2.0
-and earlier).
+**Current release: 2.6.0**, published on Maven Central, on Chargewire JDBC 2.4.0. Read-only
+connections require Hardcharger 2.13.0 or newer. Ordinary connections remain compatible with
+older servers, including 2.2.0 from before the protocol rename.
 
 ## 📦 Install
 
@@ -43,14 +43,14 @@ Maven:
 <dependency>
   <groupId>com.gizmodata</groupId>
   <artifactId>hardcharger-jdbc</artifactId>
-  <version>2.5.0</version>
+  <version>2.6.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.gizmodata:hardcharger-jdbc:2.5.0'
+implementation 'com.gizmodata:hardcharger-jdbc:2.6.0'
 ```
 
 It brings one dependency, `com.gizmodata:chargewire-jdbc`, itself a single jar with everything
@@ -388,7 +388,9 @@ The version in `pom.xml` is the next release with `-SNAPSHOT`. A release depends
 Chargewire JDBC driver, so release chargewire-jdbc first. To release X.Y.Z: set
 `<version>X.Y.Z</version>` and `chargewire-jdbc.version` to the released driver (and repin the
 submodule to its tag), move `[Unreleased]` in the [CHANGELOG](CHANGELOG.md) to
-`## [X.Y.Z] - <date>`, commit, and push the commit and the tag `vX.Y.Z` together.
+`## [X.Y.Z] - <date>`, and merge a pull request after its required checks pass. Fetch
+`origin/main`, verify its tree matches the tested candidate, and tag that exact landed commit
+`vX.Y.Z`. Push the release tag without moving it afterward.
 
 `.github/workflows/release.yml` then waits (up to an hour) until Maven Central serves that Chargewire
 driver, runs the full test suite (unit and integration) on the tagged commit against it, builds the

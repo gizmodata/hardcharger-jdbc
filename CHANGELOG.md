@@ -7,10 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-14
+
 ### Added
 
 - Server-confirmed read-only connections through the Chargewire driver, with one-way
   transitions and no writable fallback when the server does not support the option.
+
+### Changed
+
+- Build on published Chargewire JDBC 2.4.0, with its matching source tag and Maven dependency.
 
 ## [2.5.0] - 2026-11-13
 
