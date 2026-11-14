@@ -391,4 +391,154 @@ class TypesAndTimeZonesIT {
       assertTrue(refused.getMessage().contains("arrow_lossless_conversion"), refused.getMessage());
     }
   }
+
+  /**
+   * A UNION reads its member whatever the member's type: with the exact types, a UUID, a TIME WITH
+   * TIME ZONE, a BIT or a HUGEINT member, and with any types a DECIMAL, a LIST or a STRUCT, which
+   * the Chargewire driver before 2.3.0 failed on or read as NULL.
+   */
+  @Test
+  void aUnionReadsEveryMember() throws SQLException {
+    try (Connection connection = connect("");
+        Statement statement = connection.createStatement();
+        ResultSet rows =
+            statement.executeQuery(
+                "SELECT * FROM (VALUES"
+                    + " (1, union_value(n := 7)::UNION(n INTEGER, id UUID, t TIMETZ, h HUGEINT,"
+                    + " b BIT, d DECIMAL(10,2), l INTEGER[], s STRUCT(x INTEGER))),"
+                    + " (2, union_value(id := '"
+                    + ID
+                    + "'::UUID)), (3, union_value(t := TIMETZ '01:02:03+01')),"
+                    + " (4, union_value(h := "
+                    + HUGEINT_MAX
+                    + "::HUGEINT)), (5, union_value(b := '101'::BIT)),"
+                    + " (6, union_value(d := 12.34::DECIMAL(10,2))),"
+                    + " (7, union_value(l := [1, 2])), (8, union_value(s := {'x': 9})),"
+                    + " (9, NULL)) AS t(id, u) ORDER BY id")) {
+      Object[] expected = {
+        7,
+        ID,
+        OffsetTime.of(1, 2, 3, 0, ZoneOffset.ofHours(1)),
+        new BigDecimal(HUGEINT_MAX),
+        "101",
+        new BigDecimal("12.34"),
+        List.of(1, 2),
+        Map.of("x", 9),
+        null
+      };
+      for (Object value : expected) {
+        assertTrue(rows.next());
+        assertEquals(value, rows.getObject(2), "row " + rows.getInt(1));
+      }
+      assertFalse(rows.next());
+    }
+  }
+
+  /**
+   * {@code getColumns} describes the types Hardcharger encodes itself as a result's metadata and a
+   * parameter's do, not as the bytes its catalog gives them as.
+   */
+  @Test
+  void theCatalogAResultAndAParameterDescribeATypeTheSame() throws SQLException {
+    try (Connection connection = connect("");
+        Statement statement = connection.createStatement()) {
+      statement.execute(
+          "CREATE OR REPLACE TABLE described (h HUGEINT, uh UHUGEINT, t TIMETZ, n BIGNUM,"
+              + " b BIT, id UUID, v VARIANT)");
+      int[] types = {
+        Types.NUMERIC,
+        Types.NUMERIC,
+        Types.TIME_WITH_TIMEZONE,
+        Types.NUMERIC,
+        Types.OTHER,
+        Types.OTHER,
+        Types.OTHER
+      };
+      String[] names = {
+        "HUGEINT", "UHUGEINT", "TIME WITH TIME ZONE", "BIGNUM", "BIT", "UUID", "VARIANT"
+      };
+      try (ResultSet columns = connection.getMetaData().getColumns(null, null, "described", null);
+          ResultSet rows = statement.executeQuery("SELECT * FROM described");
+          PreparedStatement insert =
+              connection.prepareStatement("INSERT INTO described VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+        ResultSetMetaData result = rows.getMetaData();
+        for (int i = 1; i <= types.length; i++) {
+          assertTrue(columns.next());
+          String at = names[i - 1];
+          assertEquals(types[i - 1], columns.getInt("DATA_TYPE"), at);
+          assertEquals(types[i - 1], result.getColumnType(i), at);
+          assertEquals(types[i - 1], insert.getParameterMetaData().getParameterType(i), at);
+          assertEquals(names[i - 1], columns.getString("TYPE_NAME"), at);
+          assertEquals(names[i - 1], result.getColumnTypeName(i), at);
+          assertEquals(result.getPrecision(i), columns.getInt("COLUMN_SIZE"), at);
+          assertEquals(result.getScale(i), columns.getInt("DECIMAL_DIGITS"), at);
+        }
+        assertFalse(columns.next());
+      } finally {
+        statement.execute("DROP TABLE described");
+      }
+    }
+  }
+
+  /**
+   * A batch stores what its rows store one by one (a VARIANT keeps each row's type), and a
+   * parameter is the value it had when it was set (one {@code Timestamp} object reused for every
+   * row).
+   */
+  @Test
+  void aBatchStoresEachRowAsItWasSet() throws SQLException {
+    try (Connection connection = connect("");
+        Statement statement = connection.createStatement()) {
+      statement.execute("CREATE OR REPLACE TEMP TABLE batch (id INTEGER, v VARIANT, ts TIMESTAMP)");
+      Object[] values = {1, "a", 2L, 1.5d, new BigDecimal("2.50"), LocalDate.of(2026, 1, 15), true};
+      Timestamp reused = new Timestamp(0);
+      try (PreparedStatement insert =
+          connection.prepareStatement("INSERT INTO batch VALUES (?, ?, ?)")) {
+        for (int i = 0; i < values.length; i++) {
+          reused.setTime(Timestamp.valueOf("2026-01-0" + (i + 1) + " 00:00:00").getTime());
+          insert.setInt(1, i + 1);
+          insert.setObject(2, values[i]);
+          insert.setTimestamp(3, reused);
+          insert.addBatch();
+        }
+        reused.setTime(0);
+        assertEquals(values.length, insert.executeBatch().length);
+      }
+      String[] types = {
+        "INT32", "VARCHAR", "INT64", "DOUBLE", "DECIMAL(3, 2)", "DATE", "BOOL_TRUE"
+      };
+      try (ResultSet rows =
+          statement.executeQuery(
+              "SELECT id, variant_typeof(v), v, CAST(ts AS VARCHAR) FROM batch ORDER BY id")) {
+        for (int i = 0; i < values.length; i++) {
+          assertTrue(rows.next());
+          assertEquals(types[i], rows.getString(2), "row " + (i + 1));
+          assertEquals(values[i], rows.getObject(3), "row " + (i + 1));
+          assertEquals("2026-01-0" + (i + 1) + " 00:00:00", rows.getString(4), "row " + (i + 1));
+        }
+        assertFalse(rows.next());
+      }
+    }
+  }
+
+  /**
+   * Inside a list or a struct, a TIMESTAMP WITH TIME ZONE has the text it has as a column: the
+   * session's wall clock and its offset, not the JVM zone's wall clock.
+   */
+  @Test
+  void aNestedTimestampWithAZoneHasItsColumnsText() throws SQLException {
+    try (Connection connection = connect("");
+        Statement statement = connection.createStatement()) {
+      statement.execute("SET TimeZone = 'Asia/Kolkata'");
+      try (ResultSet rows =
+          statement.executeQuery(
+              "SELECT t, [t] AS l, {'t': t} AS s"
+                  + " FROM (SELECT TIMESTAMPTZ '2026-01-15 12:00:00+00' AS t)")) {
+        assertTrue(rows.next());
+        assertEquals("2026-01-15 17:30:00+05:30", rows.getString("t"));
+        assertEquals("[\"2026-01-15 17:30:00+05:30\"]", rows.getString("l"));
+        assertEquals("{\"t\": \"2026-01-15 17:30:00+05:30\"}", rows.getString("s"));
+      }
+    }
+  }
 }

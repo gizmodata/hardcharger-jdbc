@@ -146,7 +146,18 @@ As a parameter, a value that is a point in time (`Instant`, `OffsetDateTime`, `Z
 `java.sql.Timestamp`) is stored as that instant, and a value without a zone (`LocalDateTime`,
 `LocalDate`, `java.sql.Date`, text without an offset) means what the same literal means in that
 session: `ts = ?` with a `LocalDateTime` finds the rows `ts = TIMESTAMP '…'` finds, whatever the
-JVM's default zone is. See [Time zones](https://github.com/gizmodata/chargewire-jdbc#time-zones).
+JVM's default zone is. That holds where the server types the parameter (`ts = ?`, `ts IN (?, ?)`, an
+`INSERT`); in an expression it cannot type (`ts >= ? - INTERVAL 7 DAY`) a `java.sql.Timestamp` goes
+as a TIMESTAMP holding the JVM zone's wall clock: bind an `Instant` or an `OffsetDateTime` there,
+or write `CAST(? AS TIMESTAMPTZ)`. See
+[Time zones](https://github.com/gizmodata/chargewire-jdbc#time-zones).
+
+`getColumns`, a result's metadata and a parameter's give a type the same JDBC type, size and
+scale. A UNION reads its member whatever the member's type. Inside a list, a struct or a map, a
+`TIMESTAMP WITH TIME ZONE` has the text it has as a column. A parameter is the value it had when
+its setter was called, so one `Timestamp` or array can be set to each row's value in turn, and
+`executeBatch` stores what the same rows store one by one: a VARIANT keeps each row's own type (a
+batch whose rows differ in type there goes as one request per run of rows of the same type).
 
 ### 🔒 Read-only connections
 
@@ -155,6 +166,8 @@ and the first call on a connection adds a warning (`getWarnings()`) that says so
 refused, connect as a user with Hardcharger's `readonly` role, use a server started with
 `--read-only`, or run the statements between `BEGIN TRANSACTION READ ONLY` and `COMMIT`. See
 [Read-only connections](https://github.com/gizmodata/chargewire-jdbc#-read-only-connections).
+Read-only sessions that a connection can ask for are proposed in
+[gizmodata/hardcharger#45](https://github.com/gizmodata/hardcharger/issues/45).
 
 ### ⏳ A stopped cluster that resumes
 
