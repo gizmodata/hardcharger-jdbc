@@ -36,6 +36,10 @@ of each entry below.
   in the URL now fails the connection, as does one in the `Properties` that resembles a property
   (`tlsRootCert`, `clientCert`) or names TLS or signing in (`sslmode`); any other key in the
   `Properties` still connects and is reported as a warning (README, "Connect").
+- **Neither jar carried a licence text.** The driver-only jar now has `META-INF/LICENSE` and
+  `META-INF/NOTICE`; the standalone jar has those, with the notices of the Chargewire driver and
+  of everything it bundles, a listing of every component with its version and licence, and the
+  licence texts of SLF4J, zstd-jni and Zstandard. The build checks both jars.
 
 ### Added
 

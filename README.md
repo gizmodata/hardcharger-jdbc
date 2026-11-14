@@ -375,6 +375,14 @@ USER_MANAGED (`-Dcentral.autoPublish=true` publishes as soon as it validates), a
 
 [Apache License 2.0](LICENSE).
 
+Both jars carry their licences. The driver-only jar has `META-INF/LICENSE` and `META-INF/NOTICE`.
+The standalone jar also contains the Chargewire JDBC driver and what that driver bundles (Arrow,
+Jackson, Commons, FlatBuffers, SLF4J, zstd-jni), so its `META-INF/NOTICE` is this driver's notice
+followed by the Chargewire driver's and each component's, and it has the Chargewire driver's
+`META-INF/THIRD-PARTY-NOTICES.txt` (every component with its version and licence) and
+`META-INF/licenses/`. `JarLicensesIT` checks both jars, and that the listing names exactly the
+components in the standalone jar.
+
 ---
 
 <p align="center">
