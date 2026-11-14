@@ -68,6 +68,37 @@ class ConnectionIT {
   }
 
   @Test
+  void readOnlyPropertyIsEnforced() throws SQLException {
+    Properties properties = server.properties();
+    properties.setProperty("readOnly", "true");
+    try (Connection connection = DriverManager.getConnection(server.url(""), properties);
+        Statement statement = connection.createStatement()) {
+      assertTrue(connection.isReadOnly());
+      assertEquals("42", scalar(connection, "SELECT 42"));
+      SQLException refused =
+          assertThrows(
+              SQLException.class,
+              () -> statement.execute("CREATE TABLE wrapper_readonly_write (n INTEGER)"));
+      assertEquals("25006", refused.getSQLState());
+      assertThrows(SQLException.class, () -> connection.setReadOnly(false));
+    }
+  }
+
+  @Test
+  void transitionRestrictsAlreadyPreparedStatements() throws SQLException {
+    try (Connection connection = connect();
+        PreparedStatement statement =
+            connection.prepareStatement(
+                "CREATE TABLE wrapper_prepared_readonly_write (n INTEGER)")) {
+      connection.setReadOnly(true);
+      assertTrue(connection.isReadOnly());
+      SQLException refused = assertThrows(SQLException.class, statement::execute);
+      assertEquals("25006", refused.getSQLState());
+      assertEquals("43", scalar(connection, "SELECT 43"));
+    }
+  }
+
+  @Test
   void urlOptionsWorkAsInChargewire() throws SQLException {
     // useEncryption in the URL instead of the properties.
     Properties properties = server.properties();
@@ -298,38 +329,23 @@ class ConnectionIT {
     }
   }
 
-  /**
-   * {@code setReadOnly(true)} is a hint: the session still writes, and since the Chargewire driver
-   * 2.3.0 the connection says so in a warning, once. A read-only transaction begun in SQL is what
-   * the server enforces.
-   */
   @Test
-  void setReadOnlyIsAHintAndSaysSo() throws SQLException {
+  void setReadOnlyIsEnforcedAndAddsNoHintWarning() throws SQLException {
     try (Connection connection = connect();
         Statement statement = connection.createStatement()) {
+      statement.execute("CREATE TABLE read_only_transition (i INTEGER)");
+      assertEquals(1, statement.executeUpdate("INSERT INTO read_only_transition VALUES (1)"));
       connection.setReadOnly(true);
       assertTrue(connection.isReadOnly());
-      java.sql.SQLWarning warning = connection.getWarnings();
-      assertNotNull(warning);
-      assertEquals("01000", warning.getSQLState());
-      assertTrue(
-          warning.getMessage().startsWith("setReadOnly(true) is a hint this driver cannot enforce"),
-          warning.getMessage());
-      statement.execute("CREATE OR REPLACE TABLE read_only_hint (i INTEGER)");
-      assertEquals(1, statement.executeUpdate("INSERT INTO read_only_hint VALUES (1)"));
-      connection.setReadOnly(true);
-      assertEquals(null, connection.getWarnings().getNextWarning(), "said once");
-      statement.execute("BEGIN TRANSACTION READ ONLY");
+      assertEquals(null, connection.getWarnings());
       SQLException refused =
           assertThrows(
               SQLException.class,
-              () -> statement.executeUpdate("INSERT INTO read_only_hint VALUES (2)"));
-      assertTrue(
-          refused.getMessage().contains("transaction is launched in read-only mode"),
-          refused.getMessage());
-      statement.execute("ROLLBACK");
-      assertEquals("1", scalar(connection, "SELECT count(*) FROM read_only_hint"));
-      statement.execute("DROP TABLE read_only_hint");
+              () -> statement.executeUpdate("INSERT INTO read_only_transition VALUES (2)"));
+      assertEquals("25006", refused.getSQLState());
+      connection.setReadOnly(true);
+      assertEquals("1", scalar(connection, "SELECT count(*) FROM read_only_transition"));
+      assertThrows(SQLException.class, () -> connection.setReadOnly(false));
     }
   }
 
