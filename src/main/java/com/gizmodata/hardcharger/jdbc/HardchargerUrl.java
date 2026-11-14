@@ -1,8 +1,14 @@
 package com.gizmodata.hardcharger.jdbc;
 
+import com.gizmodata.chargewire.jdbc.ChargewireProperty;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.sql.SQLNonTransientConnectionException;
 import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A {@code jdbc:hardcharger://host[:port][/catalog][?key=value&...][;key=value;...]} URL, and the
@@ -115,13 +121,42 @@ final class HardchargerUrl {
     return name.equals(CLOUD_DOMAIN) || name.endsWith("." + CLOUD_DOMAIN);
   }
 
-  /** Hides password and token values, so a URL can appear in messages and logs. */
+  private static final Pattern OPTION = Pattern.compile("([?&;])([^=&;#]*)=([^&;#]*)");
+
+  /** The Chargewire driver's properties whose values are credentials. */
+  private static final Set<ChargewireProperty> SECRETS =
+      Set.of(
+          ChargewireProperty.PASSWORD,
+          ChargewireProperty.TOKEN,
+          ChargewireProperty.SUBJECT_TOKEN,
+          ChargewireProperty.TRUST_STORE_PASSWORD);
+
+  /**
+   * Hides option values that may be secrets, so a URL can appear in messages and logs: passwords
+   * and tokens, and the value of every key the Chargewire driver does not know (a misspelled {@code
+   * password} key holds a password all the same). It hides what the Chargewire driver's own
+   * messages hide, which {@link #restate} relies on.
+   */
   static String redact(String url) {
     if (url == null) {
       return null;
     }
-    return url.replaceAll(
-        "(?i)((?:password|token|subjecttoken|truststorepassword)=)[^&;]*", "$1***");
+    Matcher option = OPTION.matcher(url);
+    StringBuilder redacted = new StringBuilder();
+    while (option.find()) {
+      String key = option.group(2);
+      try {
+        key = URLDecoder.decode(key.replace("+", "%2B"), StandardCharsets.UTF_8);
+      } catch (IllegalArgumentException e) {
+        // Not percent-encoding: no known key, so its value is hidden.
+      }
+      ChargewireProperty property = ChargewireProperty.of(key);
+      String value = property == null || SECRETS.contains(property) ? "***" : option.group(3);
+      option.appendReplacement(
+          redacted, Matcher.quoteReplacement(option.group(1) + option.group(2) + "=" + value));
+    }
+    option.appendTail(redacted);
+    return redacted.toString();
   }
 
   /**

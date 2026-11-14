@@ -113,6 +113,41 @@ result, and `resultPartitions=1` reads one stream), in the server's row order un
 `resultOrder=any`. Results come compressed (`ipcCompression=auto`: `lz4_frame` on a near link,
 `zstd` on a far one).
 
+A key that is not one of those properties is never ignored silently, so a misspelled setting
+can't quietly not apply. In the URL it fails the connection (SQLSTATE `08001`): `Unknown
+connection property 'tlsRootCert' in the URL: did you mean 'tlsRootCerts'?`. In the `Properties` a
+key fails the same way when it resembles a property or names TLS or signing in in another
+driver's words (`sslmode`, `useSSL`); any other key there is left alone, because frameworks put
+their own in (Spark's read options, Hibernate's connection settings), and is reported as a
+warning on the connection (`getWarnings()`, SQLSTATE `01S00`). Messages name keys, never values.
+The [rules](https://github.com/gizmodata/chargewire-jdbc#properties) are the Chargewire driver's.
+
+### 🔢 Types and time zones
+
+Every Hardcharger type reads as itself, without the application choosing anything: UUID as
+`java.util.UUID`, TIME WITH TIME ZONE as `java.time.OffsetTime`, HUGEINT and UHUGEINT as
+`BigDecimal` through their whole range, BIGNUM as `BigDecimal`, BIT as its bits (`"10101"`),
+VARIANT as the Java value it holds, BOOLEAN as `Boolean`; and each takes what `getObject` returns
+for it as a parameter. The driver asks the server for its exact Arrow types as each session opens;
+`arrowLosslessConversion=false` leaves the session as the server opens it (UUID as text, TIME
+WITH TIME ZONE without its offset, HUGEINT as DECIMAL(38, 0)). The table is the Chargewire
+driver's: [DuckDB types](https://github.com/gizmodata/chargewire-jdbc#duckdb-types).
+
+A `TIMESTAMP WITH TIME ZONE` is an instant, shown in the session's `TimeZone` (never the JVM's).
+As a parameter, a value that is a point in time (`Instant`, `OffsetDateTime`, `ZonedDateTime`,
+`java.sql.Timestamp`) is stored as that instant, and a value without a zone (`LocalDateTime`,
+`LocalDate`, `java.sql.Date`, text without an offset) means what the same literal means in that
+session: `ts = ?` with a `LocalDateTime` finds the rows `ts = TIMESTAMP '…'` finds, whatever the
+JVM's default zone is. See [Time zones](https://github.com/gizmodata/chargewire-jdbc#time-zones).
+
+### 🔒 Read-only connections
+
+`Connection.setReadOnly(true)` is a hint: the session still runs any statement its user may run,
+and the first call on a connection adds a warning (`getWarnings()`) that says so. To have writes
+refused, connect as a user with Hardcharger's `readonly` role, use a server started with
+`--read-only`, or run the statements between `BEGIN TRANSACTION READ ONLY` and `COMMIT`. See
+[Read-only connections](https://github.com/gizmodata/chargewire-jdbc#-read-only-connections).
+
 ### ⏳ A stopped cluster that resumes
 
 A GizmoData Cloud cluster with auto-resume stops while nobody uses it and starts again at the

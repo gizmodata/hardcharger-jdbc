@@ -150,6 +150,18 @@ class HardchargerUrlTest {
         HardchargerUrl.redact("jdbc:hardcharger://h?user=joe&password=a:b@c;token=xyz"));
   }
 
+  /** As the Chargewire driver redacts since 2.3.0: an unknown key may be a misspelled secret. */
+  @Test
+  void redactHidesTheValuesOfUnknownKeys() {
+    assertEquals(
+        "jdbc:hardcharger://h:1/lake?pasword=***&useEncryption=false;sslmode=***;user=joe",
+        HardchargerUrl.redact(
+            "jdbc:hardcharger://h:1/lake?pasword=s3cr3t&useEncryption=false;sslmode=x;user=joe"));
+    assertEquals(
+        "jdbc:hardcharger://h?subjectToken=***&trustStorePassword=***&TOKEN=***",
+        HardchargerUrl.redact("jdbc:hardcharger://h?subjectToken=a&trustStorePassword=b&TOKEN=c"));
+  }
+
   @Test
   void restateNamesTheHardchargerUrl() {
     String url = "jdbc:hardcharger://h?bad&password=p";

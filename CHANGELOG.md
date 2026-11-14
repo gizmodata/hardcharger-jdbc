@@ -7,6 +7,73 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+On the Chargewire JDBC driver 2.3.0, whose
+[changelog](https://github.com/gizmodata/chargewire-jdbc/blob/main/CHANGELOG.md) has the details
+of each entry below.
+
+### Fixed
+
+- **A value without a time zone bound to a `TIMESTAMP WITH TIME ZONE` parameter was read in the
+  JVM's default time zone instead of the session's, so filters matched the wrong rows without an
+  error.** `setObject` with a `LocalDateTime` or a `LocalDate`, `setDate`, and `setString` with
+  text that has no offset now mean what the same literal means in that session
+  (`ts = ?` finds the rows `ts = TIMESTAMP '…'` finds), whatever the JVM's zone. Points in time
+  (`Instant`, `OffsetDateTime`, `ZonedDateTime`, `java.sql.Timestamp`) are stored as that instant,
+  as before.
+- **A `TIMESTAMP WITH TIME ZONE` read in a session whose `TimeZone` is a three-letter ID (`PST`,
+  `IST`, `EST`) showed UTC's wall clock** through `LocalDateTime`, `OffsetDateTime` and
+  `getString`.
+- **`TIME WITH TIME ZONE` lost its offset, and an `OffsetTime` could not be bound.** It now reads
+  as `java.time.OffsetTime` and takes one as a parameter.
+- **BIGNUM, BIT and VARIANT arrived as bytes, and several types could not be bound.** BIGNUM reads
+  as `BigDecimal`, BIT as its bits, VARIANT as the value it holds. A parameter for an ENUM, a
+  fixed-size ARRAY, a BIGNUM or a VARIANT failed, a HUGEINT above 38 digits did not fit, and
+  `setString` for a BIT stored the text's bytes as bits; each now stores what it was given.
+- **On a connection made to a stopped GizmoData Cloud cluster, `setSchema` followed by
+  `setCatalog` opened the session in the wrong schema, or not at all** (every statement failed
+  with `SET schema: No catalog + schema named …`).
+- **A connection property the driver does not know was ignored without a word.** An unknown key
+  in the URL now fails the connection, as does one in the `Properties` that resembles a property
+  (`tlsRootCert`, `clientCert`) or names TLS or signing in (`sslmode`); any other key in the
+  `Properties` still connects and is reported as a warning (README, "Connect").
+
+### Added
+
+- **`arrowLosslessConversion`** (default `true`): the driver asks the server for its exact Arrow
+  types as each session opens, so every Hardcharger type arrives as itself without the application
+  choosing a mode. `arrowLosslessConversion=false` leaves the session as the server opens it, as
+  2.4.4 did.
+
+### Changed
+
+Everything here is something an application written for 2.4.4 can notice.
+
+- **What `getObject` and the metadata return for some types**, for a connection that set nothing
+  (set `arrowLosslessConversion=false` to keep the "before" column for the first four):
+
+  | Type | Before (2.4.4) | Now |
+  |---|---|---|
+  | UUID | `String`, VARCHAR | `java.util.UUID`, OTHER, type name `UUID` (`getString` is unchanged) |
+  | TIME WITH TIME ZONE | `java.sql.Time` without the offset, TIME | `java.time.OffsetTime`, TIME_WITH_TIMEZONE |
+  | HUGEINT, UHUGEINT | `BigDecimal`, DECIMAL, type name `DECIMAL(38,0)`; above 38 digits an error | `BigDecimal`, NUMERIC, type name `HUGEINT` or `UHUGEINT`; every value reads |
+  | BIT | `byte[]`, VARBINARY | `String` of `0` and `1`, OTHER, type name `BIT` |
+  | BIGNUM | `byte[]`, VARBINARY | `BigDecimal`, NUMERIC, type name `BIGNUM` |
+  | VARIANT | `Map` of two byte arrays, STRUCT | the value it holds, OTHER, type name `VARIANT` |
+  | JSON | `String`, VARCHAR, type name `VARCHAR` | the same, type name `JSON` |
+
+- **Connection strings that connected before and now fail**: a URL with a key that is not a
+  connection property (it was ignored), and `Properties` with a key that resembles one or names
+  TLS or signing in.
+- **`Connection.setReadOnly(true)` adds a warning** saying that it is a hint and enforces
+  nothing (it never did). No statement is refused.
+- **Parameters typed `TIMESTAMP WITH TIME ZONE`**: `setDate` without a `Calendar` is that date at
+  midnight in the session's zone (before: the JVM's); `setObject(value, Types.TIMESTAMP)` with an
+  `Instant` or `OffsetDateTime` stores that instant (before: its wall clock read in the JVM's
+  zone); text without an offset is read by the server, so it takes every form a literal takes and
+  fails with the server's error (before: ISO only, SQLSTATE `22018`); `setTime` is refused with
+  `22018` (before: stored on 1970-01-01).
+- A URL shown in an error hides the value of every unknown key as well as passwords and tokens.
+
 ## [2.4.4] - 2026-11-07
 
 On the Chargewire JDBC driver 2.2.6.

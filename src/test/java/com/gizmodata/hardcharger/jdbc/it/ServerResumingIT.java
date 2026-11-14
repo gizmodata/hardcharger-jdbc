@@ -93,6 +93,69 @@ class ServerResumingIT {
     assertEquals(1, standIn.seen(TOKEN).size(), "resumeTimeout=0: no second sign-in");
   }
 
+  private static String place(Connection connection) throws SQLException {
+    try (Statement statement = connection.createStatement();
+        ResultSet rows =
+            statement.executeQuery("SELECT current_catalog() || '.' || current_schema()")) {
+      assertTrue(rows.next());
+      return rows.getString(1);
+    }
+  }
+
+  /**
+   * A connection to a stopped cluster keeps {@code setCatalog} and {@code setSchema} until its
+   * first statement opens the session. The Chargewire driver 2.2.6 kept a schema set before the
+   * catalog and sent both: the session opened in a schema of that name in the new catalog, or, with
+   * none there, no statement could ever run. The same settings must end in the same place as on a
+   * serving cluster, where each is sent as it is made.
+   */
+  @Test
+  void onAStoppedClusterSetCatalogForgetsTheSchemaSetBefore() throws Exception {
+    try (Connection connection = DriverManager.getConnection(standIn.url(""), server.properties());
+        Statement statement = connection.createStatement()) {
+      statement.execute("ATTACH IF NOT EXISTS ':memory:' AS place_a");
+      statement.execute("ATTACH IF NOT EXISTS ':memory:' AS place_b");
+      statement.execute("CREATE SCHEMA IF NOT EXISTS place_a.only_a");
+      statement.execute("CREATE SCHEMA IF NOT EXISTS place_a.both");
+      statement.execute("CREATE SCHEMA IF NOT EXISTS place_b.both");
+    }
+    for (boolean stopped : new boolean[] {false, true}) {
+      standIn.reportStopped(stopped);
+      String how = stopped ? "a stopped cluster" : "a serving cluster";
+      // place_b has no schema only_a: sending both would refuse every statement.
+      try (Connection connection =
+          DriverManager.getConnection(standIn.url("catalog=place_a"), server.properties())) {
+        connection.setSchema("only_a");
+        connection.setCatalog("place_b");
+        assertEquals("place_b.main", place(connection), how);
+        assertEquals("main", connection.getSchema(), how);
+      }
+      // Both catalogs have the schema: sending both would open in it, with no error to notice.
+      try (Connection connection =
+          DriverManager.getConnection(standIn.url("catalog=place_a"), server.properties())) {
+        connection.setSchema("both");
+        connection.setCatalog("place_b");
+        assertEquals("place_b.main", place(connection), how);
+      }
+      // A schema given to connect is forgotten the same way; one set after the catalog is kept.
+      try (Connection connection =
+          DriverManager.getConnection(
+              standIn.url("catalog=place_a&schema=only_a"), server.properties())) {
+        connection.setCatalog("place_b");
+        assertEquals("place_b.main", place(connection), how);
+        connection.setCatalog("place_a");
+        connection.setSchema("only_a");
+        assertEquals("place_a.only_a", place(connection), how);
+      }
+      try (Connection connection =
+          DriverManager.getConnection(standIn.url(""), server.properties())) {
+        connection.setCatalog("place_a");
+        connection.setSchema("both");
+        assertEquals("place_a.both", place(connection), how);
+      }
+    }
+  }
+
   @Test
   void aStoppedClusterIsConnectedWithoutSigningInAndTheFirstStatementSetsUpTheSession()
       throws Exception {
