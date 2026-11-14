@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Server-confirmed read-only connections through the Chargewire driver, with one-way
+  transitions and no writable fallback when the server does not support the option.
+
 ## [2.5.0] - 2026-11-13
 
 On the Chargewire JDBC driver 2.3.0, whose

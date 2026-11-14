@@ -161,13 +161,31 @@ batch whose rows differ in type there goes as one request per run of rows of the
 
 ### 🔒 Read-only connections
 
-`Connection.setReadOnly(true)` is a hint: the session still runs any statement its user may run,
-and the first call on a connection adds a warning (`getWarnings()`) that says so. To have writes
-refused, connect as a user with Hardcharger's `readonly` role, use a server started with
-`--read-only`, or run the statements between `BEGIN TRANSACTION READ ONLY` and `COMMIT`. See
-[Read-only connections](https://github.com/gizmodata/chargewire-jdbc#-read-only-connections).
-Read-only sessions that a connection can ask for are proposed in
-[gizmodata/hardcharger#45](https://github.com/gizmodata/hardcharger/issues/45).
+Set the `readOnly=true` connection property to require server-enforced read-only mode:
+
+```java
+Properties properties = new Properties();
+properties.setProperty("user", username);
+properties.setProperty("password", password);
+properties.setProperty("readOnly", "true");
+try (Connection connection = DriverManager.getConnection(url, properties);
+     Statement statement = connection.createStatement();
+     ResultSet rows = statement.executeQuery("SELECT 42 AS answer")) {
+  rows.next();
+  System.out.println(rows.getInt(1));
+}
+```
+
+Here `url`, `username` and `password` are your connection details; import `java.sql.*`
+and `java.util.Properties`. `connection.setReadOnly(true)` requests the same enforced
+restriction on an existing connection. It is one-way: open a separate connection to write.
+The driver confirms the mode before session setup, and requests and confirms it again
+when replacing a lost session. A lazy connection confirms on its first operation;
+`isReadOnly()` also confirms a requested read-only connection.
+
+Older servers that reject or ignore the option cause an error, never a writable fallback.
+Connections that omit it keep their existing behavior. Refused writes have SQLSTATE
+`25006`. Read-only adds no permissions and does not sandbox installed extension code.
 
 ### ⏳ A stopped cluster that resumes
 
